@@ -168,7 +168,7 @@ const styles = {
     alignItems: 'center',
     gap: 8,
     background: 'var(--gold)',
-    color: '#0c0c0e',
+    color: '#fff',
     border: 'none',
     borderRadius: 6,
     padding: '12px 24px',

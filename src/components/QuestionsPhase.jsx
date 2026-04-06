@@ -431,7 +431,7 @@ const styles = {
     padding: '6px 14px',
     fontSize: 12,
     fontWeight: 600,
-    color: '#0c0c0e',
+    color: '#fff',
     cursor: 'pointer',
     transition: 'opacity 0.2s',
   },
@@ -471,7 +471,7 @@ const styles = {
   hint: { fontSize: 12, color: 'var(--text-dim)' },
   btn: {
     display: 'flex', alignItems: 'center', gap: 8,
-    background: 'var(--gold)', color: '#0c0c0e',
+    background: 'var(--gold)', color: '#fff',
     border: 'none', borderRadius: 6,
     padding: '10px 20px', fontSize: 13, fontWeight: 600,
     cursor: 'pointer', transition: 'opacity 0.2s',

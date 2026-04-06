@@ -1,6 +1,6 @@
 // src/App.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { ChevronLeft, Home } from 'lucide-react'
+import { ChevronLeft, Home, Pause, Play } from 'lucide-react'
 import Dashboard, { saveToHistory } from './components/Dashboard'
 import SetupPhase from './components/SetupPhase'
 import QuestionsPhase from './components/QuestionsPhase'
@@ -11,6 +11,8 @@ import { PHASES } from './lib/session'
 
 const STORAGE_KEY = 'advisory-session'
 const TIMER_KEY = 'advisory-timer-start'
+const TIMER_PAUSED_KEY = 'advisory-timer-paused'
+const TIMER_ELAPSED_KEY = 'advisory-timer-elapsed'
 const TIMER_DURATION = 60 * 60
 
 function loadSaved() {
@@ -30,15 +32,33 @@ function loadTimerStart() {
   }
 }
 
+function loadTimerPaused() {
+  try {
+    return localStorage.getItem(TIMER_PAUSED_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function loadTimerElapsed() {
+  try {
+    const val = localStorage.getItem(TIMER_ELAPSED_KEY)
+    return val ? Number(val) : 0
+  } catch {
+    return 0
+  }
+}
+
 function formatTime(totalSeconds) {
   const m = Math.max(0, Math.floor(totalSeconds / 60))
   const s = Math.max(0, totalSeconds % 60)
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-function SessionTimer({ startTime }) {
+function SessionTimer({ startTime, paused, elapsedWhenPaused, onTogglePause }) {
   const [remaining, setRemaining] = useState(() => {
     if (!startTime) return TIMER_DURATION
+    if (paused) return Math.max(0, TIMER_DURATION - elapsedWhenPaused)
     const elapsed = Math.floor((Date.now() - startTime) / 1000)
     return Math.max(0, TIMER_DURATION - elapsed)
   })
@@ -46,6 +66,10 @@ function SessionTimer({ startTime }) {
 
   useEffect(() => {
     if (!startTime) return
+    if (paused) {
+      setRemaining(Math.max(0, TIMER_DURATION - elapsedWhenPaused))
+      return
+    }
     function tick() {
       const elapsed = Math.floor((Date.now() - startTime) / 1000)
       const left = Math.max(0, TIMER_DURATION - elapsed)
@@ -58,29 +82,48 @@ function SessionTimer({ startTime }) {
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [startTime])
+  }, [startTime, paused, elapsedWhenPaused])
 
   const timerColor =
-    remaining < 5 * 60 ? '#e74c3c' :
-    remaining < 10 * 60 ? '#f0ad4e' :
-    'var(--gold)'
+    remaining < 5 * 60 ? 'var(--red)' :
+    remaining < 10 * 60 ? '#e65100' :
+    'var(--text-muted)'
 
   return (
-    <div style={{
-      fontFamily: 'var(--font-mono)',
-      fontSize: 18,
-      fontWeight: 700,
-      color: timerColor,
-      letterSpacing: '0.05em',
-      padding: '4px 16px',
-      borderRadius: 6,
-      border: `1px solid ${remaining < 5 * 60 ? 'rgba(231,76,60,0.4)' : remaining < 10 * 60 ? 'rgba(240,173,78,0.4)' : 'rgba(201,168,76,0.25)'}`,
-      background: remaining < 5 * 60 ? 'rgba(231,76,60,0.08)' : remaining < 10 * 60 ? 'rgba(240,173,78,0.08)' : 'rgba(201,168,76,0.06)',
-      transition: 'color 0.5s, border-color 0.5s, background 0.5s',
-      minWidth: 72,
-      textAlign: 'center',
-    }}>
-      {formatTime(remaining)}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{
+        fontFamily: 'var(--font-mono)',
+        fontSize: 18,
+        fontWeight: 700,
+        color: timerColor,
+        letterSpacing: '0.05em',
+        padding: '4px 16px',
+        borderRadius: 6,
+        border: `1px solid ${remaining < 5 * 60 ? 'var(--red)' : 'var(--border)'}`,
+        background: remaining < 5 * 60 ? 'var(--red-dim)' : 'var(--surface)',
+        transition: 'color 0.5s, border-color 0.5s, background 0.5s',
+        minWidth: 72,
+        textAlign: 'center',
+      }}>
+        {formatTime(remaining)}
+      </div>
+      <button
+        onClick={onTogglePause}
+        style={{
+          background: paused ? 'var(--accent)' : 'var(--surface)',
+          border: `1px solid ${paused ? 'var(--accent)' : 'var(--border)'}`,
+          color: paused ? '#fff' : 'var(--text-muted)',
+          borderRadius: 6,
+          padding: 6,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          transition: 'all 0.2s',
+        }}
+        title={paused ? 'Reanudar' : 'Pausar'}
+      >
+        {paused ? <Play size={14} /> : <Pause size={14} />}
+      </button>
     </div>
   )
 }
@@ -94,19 +137,47 @@ export default function App() {
   const [experts, setExperts] = useState(saved?.experts ?? [])
   const [synthesisKey, setSynthesisKey] = useState(0)
   const [timerStart, setTimerStart] = useState(loadTimerStart)
+  const [timerPaused, setTimerPaused] = useState(loadTimerPaused)
+  const [timerElapsed, setTimerElapsed] = useState(loadTimerElapsed)
   const [sessionId, setSessionId] = useState(saved?.sessionId ?? null)
   const [planOutput, setPlanOutput] = useState(saved?.planOutput ?? null)
 
   const startTimer = useCallback(() => {
     const now = Date.now()
     setTimerStart(now)
+    setTimerPaused(false)
+    setTimerElapsed(0)
     localStorage.setItem(TIMER_KEY, String(now))
+    localStorage.setItem(TIMER_PAUSED_KEY, 'false')
+    localStorage.setItem(TIMER_ELAPSED_KEY, '0')
   }, [])
 
   const resetTimer = useCallback(() => {
     setTimerStart(null)
+    setTimerPaused(false)
+    setTimerElapsed(0)
     localStorage.removeItem(TIMER_KEY)
+    localStorage.removeItem(TIMER_PAUSED_KEY)
+    localStorage.removeItem(TIMER_ELAPSED_KEY)
   }, [])
+
+  const togglePause = useCallback(() => {
+    if (timerPaused) {
+      // Resuming: calculate new start time to account for elapsed time
+      const newStart = Date.now() - timerElapsed * 1000
+      setTimerStart(newStart)
+      setTimerPaused(false)
+      localStorage.setItem(TIMER_KEY, String(newStart))
+      localStorage.setItem(TIMER_PAUSED_KEY, 'false')
+    } else {
+      // Pausing: save current elapsed time
+      const elapsed = Math.floor((Date.now() - timerStart) / 1000)
+      setTimerElapsed(elapsed)
+      setTimerPaused(true)
+      localStorage.setItem(TIMER_ELAPSED_KEY, String(elapsed))
+      localStorage.setItem(TIMER_PAUSED_KEY, 'true')
+    }
+  }, [timerPaused, timerStart, timerElapsed])
 
   useEffect(() => {
     if (view === 'session') {
@@ -208,7 +279,6 @@ export default function App() {
       planOutput: plan,
       completed,
     }
-    // Remove old entry with same id, then add new
     const history = (JSON.parse(localStorage.getItem('advisory-history') || '[]'))
       .filter(h => h.id !== entry.id)
     history.unshift(entry)
@@ -262,7 +332,7 @@ export default function App() {
                   ...styles.stepDot,
                   background: i <= activeIndex ? 'var(--gold)' : 'var(--border)',
                   border: i === activeIndex ? '2px solid var(--gold-light)' : '2px solid transparent',
-                  boxShadow: i === activeIndex ? '0 0 10px rgba(139,26,43,0.4)' : 'none',
+                  boxShadow: i === activeIndex ? '0 0 10px rgba(198,40,40,0.3)' : 'none',
                 }}>
                   {i < activeIndex ? '✓' : i + 1}
                 </div>
@@ -283,7 +353,14 @@ export default function App() {
           ))}
         </div>
 
-        {timerStart && <SessionTimer startTime={timerStart} />}
+        {timerStart && (
+          <SessionTimer
+            startTime={timerStart}
+            paused={timerPaused}
+            elapsedWhenPaused={timerElapsed}
+            onTogglePause={togglePause}
+          />
+        )}
 
         <div style={styles.navRight}>
           {activeIndex > 0 && (

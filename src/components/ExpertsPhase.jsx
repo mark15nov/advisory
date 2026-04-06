@@ -242,7 +242,7 @@ const styles = {
   },
   primaryBtn: {
     display: 'flex', alignItems: 'center', gap: 8,
-    background: 'var(--gold)', color: '#0c0c0e',
+    background: 'var(--gold)', color: '#fff',
     border: 'none', borderRadius: 6,
     padding: '12px 24px', fontSize: 14, fontWeight: 600,
     cursor: 'pointer', transition: 'opacity 0.2s',

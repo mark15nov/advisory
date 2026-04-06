@@ -1,21 +1,24 @@
 :root {
-  --bg: #0f1a2e;
-  --surface: #1a2744;
-  --surface-2: #22305a;
-  --border: #2a3a5c;
-  --border-light: #3a4d6e;
-  --gold: #8b1a2b;
-  --gold-light: #b42d42;
-  --gold-dim: rgba(139, 26, 43, 0.2);
-  --text: #f0f2f5;
-  --text-muted: #9ba4b8;
-  --text-dim: #6b7590;
-  --green: #4caf7a;
-  --green-dim: rgba(76, 175, 122, 0.12);
-  --blue: #5b8dee;
-  --blue-dim: rgba(91, 141, 238, 0.12);
-  --red: #e05a5a;
-  --red-dim: rgba(224, 90, 90, 0.12);
+  --bg: #ffffff;
+  --surface: #f7f8fa;
+  --surface-2: #eef0f4;
+  --border: #d8dce6;
+  --border-light: #c5cbd8;
+  --gold: #c62828;
+  --gold-light: #e53935;
+  --gold-dim: rgba(198, 40, 40, 0.08);
+  --accent: #1565c0;
+  --accent-light: #1e88e5;
+  --accent-dim: rgba(21, 101, 192, 0.08);
+  --text: #1a1a2e;
+  --text-muted: #5a6178;
+  --text-dim: #8b92a8;
+  --green: #2e7d32;
+  --green-dim: rgba(46, 125, 50, 0.10);
+  --blue: #1565c0;
+  --blue-dim: rgba(21, 101, 192, 0.10);
+  --red: #c62828;
+  --red-dim: rgba(198, 40, 40, 0.10);
 
   --font-display: 'Playfair Display', Georgia, serif;
   --font-body: 'DM Sans', sans-serif;
@@ -57,7 +60,7 @@ button {
   font-family: var(--font-body);
 }
 
-textarea, input {
+textarea, input, select {
   font-family: var(--font-body);
 }
 
@@ -78,7 +81,6 @@ textarea, input {
   nav {
     display: none !important;
   }
-  /* Break out of all fixed containers */
   html, body, #root, #root > div, main, main > div {
     height: auto !important;
     max-height: none !important;
@@ -90,12 +92,10 @@ textarea, input {
 /* ===== Mobile Responsive ===== */
 
 @media (max-width: 768px) {
-  /* Allow vertical scrolling on mobile */
   body {
     overflow: auto;
   }
 
-  /* Reduce nav padding and height */
   nav {
     padding: 0 12px !important;
     height: auto !important;
@@ -104,12 +104,10 @@ textarea, input {
     gap: 4px;
   }
 
-  /* Hide the "Business Boards" subtitle on mobile */
   nav > div:first-child > span:last-child {
     display: none;
   }
 
-  /* Stepper: smaller dots and shorter connector lines */
   nav > div:nth-child(2) {
     gap: 0;
   }
@@ -124,18 +122,15 @@ textarea, input {
     font-size: 8px !important;
   }
 
-  /* Shorter step connector lines */
   nav > div:nth-child(2) > div[style*="width"] {
     width: 24px !important;
   }
 
-  /* Nav right buttons: smaller */
   nav button {
     padding: 4px 8px !important;
     font-size: 11px !important;
   }
 
-  /* Reduce heading sizes throughout */
   h1 {
     font-size: 28px !important;
   }
@@ -148,30 +143,25 @@ textarea, input {
     font-size: 16px !important;
   }
 
-  /* Reduce container/section padding */
   main > div {
     padding: 16px 12px !important;
   }
 
-  /* Force grid-like layouts to single column on mobile */
   div[style*="grid-template-columns"],
   div[style*="gridTemplateColumns"] {
     grid-template-columns: 1fr !important;
   }
 
-  /* Reduce gap in flex/grid containers */
   div[style*="gap: 24px"],
   div[style*="gap: 32px"] {
     gap: 12px !important;
   }
 
-  /* Textareas full width */
   textarea {
     font-size: 14px !important;
     min-height: 120px;
   }
 
-  /* Buttons: ensure they don't overflow */
   button {
     max-width: 100%;
     white-space: nowrap;
@@ -181,7 +171,6 @@ textarea, input {
 }
 
 @media (max-width: 480px) {
-  /* Extra-small screens */
   h1 {
     font-size: 22px !important;
   }
@@ -198,7 +187,6 @@ textarea, input {
     padding: 12px 8px !important;
   }
 
-  /* Hide step labels, show only dots on very small screens */
   nav > div:nth-child(2) > div > span {
     display: none;
   }

@@ -13,28 +13,28 @@ try {
 const app = express()
 app.use(express.json())
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
-if (!GROQ_API_KEY) {
-  console.error('❌ Falta GROQ_API_KEY en .env')
+if (!GEMINI_API_KEY) {
+  console.error('❌ Falta GEMINI_API_KEY en .env')
   process.exit(1)
 }
 
 const MAX_RETRIES = 3
 
-async function callGroq(groqMessages, stream, maxTokens = 4096) {
+async function callGemini(geminiMessages, stream, maxTokens = 8192) {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Authorization': `Bearer ${GEMINI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: groqMessages,
+        model: 'gemini-2.5-flash',
+        messages: geminiMessages,
         max_tokens: maxTokens,
-        temperature: 0.6,
+        temperature: 0.3,
         stream,
       }),
     })
@@ -53,18 +53,18 @@ async function callGroq(groqMessages, stream, maxTokens = 4096) {
 app.post('/api/chat', async (req, res) => {
   const { system, messages, stream } = req.body
 
-  const groqMessages = [
+  const geminiMessages = [
     { role: 'system', content: system },
     ...messages,
   ]
 
   try {
-    const response = await callGroq(groqMessages, !!stream)
+    const response = await callGemini(geminiMessages, !!stream)
 
     if (!response.ok) {
       const err = await response.json()
-      console.error('Groq error:', JSON.stringify(err))
-      return res.status(response.status).json({ error: { message: err.error?.message || 'Error de Groq' } })
+      console.error('Gemini error:', JSON.stringify(err))
+      return res.status(response.status).json({ error: { message: err.error?.message || 'Error de Gemini' } })
     }
 
     if (stream) {
@@ -108,5 +108,5 @@ app.post('/api/chat', async (req, res) => {
 })
 
 app.listen(3001, () => {
-  console.log('🔌 Proxy Groq corriendo en http://localhost:3001')
+  console.log('🔌 Proxy Gemini corriendo en http://localhost:3001')
 })

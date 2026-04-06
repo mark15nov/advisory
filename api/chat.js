@@ -3,15 +3,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: { message: 'Method not allowed' } })
   }
 
-  const GROQ_API_KEY = process.env.GROQ_API_KEY
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
-  if (!GROQ_API_KEY) {
+  if (!GEMINI_API_KEY) {
     return res.status(500).json({ error: { message: 'API key no configurada' } })
   }
 
   const { system, messages, stream } = req.body
 
-  const groqMessages = [
+  const geminiMessages = [
     { role: 'system', content: system },
     ...messages,
   ]
@@ -19,17 +19,17 @@ export default async function handler(req, res) {
   try {
     let response
     for (let attempt = 1; attempt <= 3; attempt++) {
-      response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Authorization': `Bearer ${GEMINI_API_KEY}`,
         },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: groqMessages,
-          max_tokens: 4096,
-          temperature: 0.6,
+          model: 'gemini-2.5-flash',
+          messages: geminiMessages,
+          max_tokens: 8192,
+          temperature: 0.3,
           stream: !!stream,
         }),
       })
@@ -42,8 +42,8 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const err = await response.json()
-      console.error('Groq error:', JSON.stringify(err))
-      return res.status(response.status).json({ error: { message: err.error?.message || 'Error de Groq' } })
+      console.error('Gemini error:', JSON.stringify(err))
+      return res.status(response.status).json({ error: { message: err.error?.message || 'Error de Gemini' } })
     }
 
     if (stream) {
