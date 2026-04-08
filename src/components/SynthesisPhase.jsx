@@ -1,15 +1,105 @@
 // src/components/SynthesisPhase.jsx
-import React, { useEffect, useState, useRef } from 'react'
-import { Loader2, Sparkles, Printer, ChevronLeft, ChevronRight } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { Loader2, Sparkles, Printer, ChevronLeft, ChevronRight, Users } from 'lucide-react'
 import { callClaude } from '../hooks/useClaude'
 import { SYSTEM_PROMPTS } from '../lib/session'
+
+const markdownComponents = {
+  p: ({ children }) => <p className="plan-para plan-markdown-p">{children}</p>,
+  ul: ({ children }) => <ul className="plan-markdown-ul">{children}</ul>,
+  ol: ({ children }) => <ol className="plan-markdown-ol">{children}</ol>,
+  li: ({ children }) => <li className="plan-markdown-li">{children}</li>,
+  h1: ({ children }) => <h4 className="plan-md-heading">{children}</h4>,
+  h2: ({ children }) => <h4 className="plan-md-heading">{children}</h4>,
+  h3: ({ children }) => <h4 className="plan-md-heading">{children}</h4>,
+  h4: ({ children }) => <h5 className="plan-md-heading-sm">{children}</h5>,
+  h5: ({ children }) => <h5 className="plan-md-heading-sm">{children}</h5>,
+  h6: ({ children }) => <h6 className="plan-md-heading-sm">{children}</h6>,
+  strong: ({ children }) => <strong className="plan-md-strong">{children}</strong>,
+  em: ({ children }) => <em className="plan-md-em">{children}</em>,
+  a: ({ href, children }) => (
+    <a className="plan-md-a" href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+  ),
+  blockquote: ({ children }) => <blockquote className="plan-md-bq">{children}</blockquote>,
+  code: ({ className, children, ...props }) => {
+    const inline = !className
+    if (inline) return <code className="plan-md-code-inline">{children}</code>
+    return (
+      <pre className="plan-md-pre">
+        <code className={className}>{children}</code>
+      </pre>
+    )
+  },
+  table: ({ children }) => (
+    <div className="plan-table-wrapper plan-md-table-wrap">
+      <table className="plan-table plan-md-table">{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => <thead>{children}</thead>,
+  tbody: ({ children }) => <tbody>{children}</tbody>,
+  tr: ({ children }) => <tr>{children}</tr>,
+  th: ({ children }) => <th>{children}</th>,
+  td: ({ children }) => <td>{children}</td>,
+  hr: () => <hr className="plan-md-hr" />,
+}
 
 export default function SynthesisPhase({ session, questionHistory, experts, onDone }) {
   const [output, setOutput] = useState('')
   const [done, setDone] = useState(false)
   const [currentSlide, setCurrentSlide] = useState(0)
+  const [directoryAdvisors, setDirectoryAdvisors] = useState([])
+  const [directoryStatus, setDirectoryStatus] = useState('loading')
 
   useEffect(() => { generate() }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const profile = {
+      company: session.company || '',
+      industry: session.industry || '',
+      location: session.location || '',
+      role: session.role || '',
+      caseText: session.caseText || '',
+      whatYouDo: session.whatYouDo || '',
+      differentiation: session.differentiation || '',
+    }
+    setDirectoryStatus('loading')
+    ;(async () => {
+      try {
+        const r = await fetch('/api/advisory-recommendations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(profile),
+        })
+        if (cancelled) return
+        if (!r.ok) {
+          setDirectoryAdvisors([])
+          setDirectoryStatus('error')
+          return
+        }
+        const data = await r.json()
+        const list = Array.isArray(data.candidates) ? data.candidates : []
+        setDirectoryAdvisors(list)
+        setDirectoryStatus(list.length ? 'ok' : 'empty')
+      } catch {
+        if (!cancelled) {
+          setDirectoryAdvisors([])
+          setDirectoryStatus('error')
+        }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [
+    session.company,
+    session.industry,
+    session.location,
+    session.role,
+    session.caseText,
+    session.whatYouDo,
+    session.differentiation,
+  ])
 
   async function generate() {
     const expertSummary = experts
@@ -51,6 +141,15 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
     await callClaude({
       system: SYSTEM_PROMPTS.synthesis,
       messages: [{ role: 'user', content: prompt }],
+      advisoryProfile: {
+        company: session.company || '',
+        industry: session.industry || '',
+        location: session.location || '',
+        role: session.role || '',
+        caseText: session.caseText || '',
+        whatYouDo: session.whatYouDo || '',
+        differentiation: session.differentiation || '',
+      },
       onChunk: (chunk) => { streamed += chunk; setOutput(streamed) },
     })
     setDone(true)
@@ -66,7 +165,8 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
     'MÉTRICAS DE ÉXITO': '06',
     'RIESGOS Y MITIGACIONES': '07',
     'HOJA DE RUTA: 90 DÍAS': '08',
-    'CARTA DEL CONSEJO': '09',
+    'ADVISORS RECOMENDADOS': '09',
+    'CARTA DEL CONSEJO': '10',
   }
 
   function renderScorecard(content) {
@@ -153,96 +253,77 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
     )
   }
 
-  function renderCarta(content) {
-    return (
-      <div className="carta-container">
-        <p className="carta-text">{content}</p>
-      </div>
-    )
+  function sectionNumForTitle(title, i) {
+    const u = title.toUpperCase()
+    for (const key of Object.keys(sectionIcons)) {
+      if (u.includes(key)) return sectionIcons[key]
+    }
+    return String(i + 1).padStart(2, '0')
   }
 
-  function renderTable(lines) {
-    const rows = lines
-      .filter(l => l.trim().startsWith('|') && !l.trim().match(/^\|[\s-|]+\|$/))
-      .map(l => l.split('|').slice(1, -1).map(c => c.trim()))
-
-    if (rows.length < 2) return null
-    const headers = rows[0]
-    const body = rows.slice(1)
-
-    return (
-      <div className="plan-table-wrapper">
-        <table className="plan-table">
-          <thead>
-            <tr>
-              {headers.map((h, i) => <th key={i}>{h}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {body.map((row, i) => (
-              <tr key={i}>
-                {row.map((cell, j) => {
-                  const isLast = j === row.length - 1
-                  let cellClass = ''
-                  if (isLast) {
-                    const lower = cell.toLowerCase()
-                    if (lower.includes('alta')) cellClass = 'coincidence-high'
-                    else if (lower.includes('media')) cellClass = 'coincidence-mid'
-                    else if (lower.includes('baja')) cellClass = 'coincidence-low'
-                  }
-                  return <td key={j} className={cellClass}>{cell}</td>
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    )
-  }
-
+  /** Parte por ## / ### (y #) al inicio de línea; compatible con modelos que no siguen el formato fijo. */
   function parseSections(text) {
-    const cleaned = text.replace(/^##\s+/, '')
-    const sections = cleaned.split(/\n## /).filter(Boolean)
-    return sections.map((section, i) => {
-      const [heading, ...rest] = section.split('\n')
-      const title = heading.replace(/^#+\s*/, '')
-      const content = rest.join('\n').trim()
-      const num = sectionIcons[title] || String(i + 1).padStart(2, '0')
-      return { title, content, num, index: i }
-    })
+    if (!text || !text.trim()) return []
+    const rawLines = text.replace(/\r\n/g, '\n').split('\n')
+    const blocks = []
+    let currentTitle = null
+    let currentLines = []
+
+    function flush() {
+      const content = currentLines.join('\n').trim()
+      if (currentTitle === null && !content) return
+      const title = currentTitle ?? 'Introducción'
+      blocks.push({ title, content })
+      currentTitle = null
+      currentLines = []
+    }
+
+    for (const line of rawLines) {
+      const m = line.match(/^(#{1,6})\s+(.+)$/)
+      if (m) {
+        flush()
+        currentTitle = m[2].trim()
+      } else {
+        currentLines.push(line)
+      }
+    }
+    flush()
+
+    return blocks.map((b, i) => ({
+      title: b.title,
+      content: b.content,
+      num: sectionNumForTitle(b.title, i),
+      index: i,
+    }))
+  }
+
+  function renderMarkdownBody(content) {
+    const trimmed = (content || '').trim()
+    if (!trimmed) return null
+    return (
+      <div className="plan-markdown">
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+          {trimmed}
+        </ReactMarkdown>
+      </div>
+    )
   }
 
   function renderSectionContent(title, content) {
-    const isScorecard = title.toUpperCase() === 'SCORECARD'
-    const isTimeline = title.toUpperCase().includes('HOJA DE RUTA')
-    const isCarta = title.toUpperCase().includes('CARTA DEL CONSEJO')
+    const u = title.toUpperCase()
+    const isScorecard = u === 'SCORECARD' || (u.includes('SCORECARD') && !u.includes('DIAGNÓSTICO'))
+    const isTimeline = u.includes('HOJA DE RUTA') || u.includes('90 DÍAS')
+    const isCarta = u.includes('CARTA DEL CONSEJO')
 
-    const allLines = content.split('\n')
-    const tableLines = allLines.filter(l => l.trim().startsWith('|'))
-    const nonTableLines = allLines.filter(l => !l.trim().startsWith('|'))
-    const hasTable = tableLines.length >= 3
+    const scorecardEl = isScorecard ? renderScorecard(content) : null
+    const timelineEl = isTimeline ? renderTimeline(content) : null
 
     return (
       <div className="plan-section-content">
-        {isScorecard && renderScorecard(content)}
-        {isTimeline && renderTimeline(content)}
-        {isCarta && renderCarta(content)}
-        {!isScorecard && !isTimeline && !isCarta && hasTable && renderTable(tableLines)}
-        {!isScorecard && !isTimeline && !isCarta && nonTableLines.map((line, j) => {
-          if (!line.trim()) return null
-          if (/^\d+\./.test(line)) {
-            return (
-              <div key={j} className="plan-numbered">
-                <span className="plan-num">{line.match(/^(\d+)\./)?.[1]}</span>
-                <span className="plan-num-text">{line.replace(/^\d+\.\s*/, '')}</span>
-              </div>
-            )
-          }
-          if (line.startsWith('- ') || line.startsWith('* ')) {
-            return <div key={j} className="plan-bullet">{line.replace(/^[-*]\s*/, '')}</div>
-          }
-          return <p key={j} className="plan-para">{line}</p>
-        })}
+        {isScorecard && (scorecardEl || renderMarkdownBody(content))}
+        {isTimeline && (timelineEl || renderMarkdownBody(content))}
+        {isCarta && renderMarkdownBody(content)}
+        {!isScorecard && !isTimeline && !isCarta && renderMarkdownBody(content)}
       </div>
     )
   }
@@ -276,6 +357,71 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
 
   const expertNames = experts.filter(e => e.name?.trim()).map(e => e.name.trim())
 
+  function renderDirectoryAdvisorsPanel({ printClass = '' } = {}) {
+    const wrap = (inner) => <div className={`directory-advisors ${printClass}`.trim()}>{inner}</div>
+
+    if (directoryStatus === 'loading') {
+      return wrap(
+        <div className="directory-advisors-loading">
+          <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+          <span>Consultando directorio Advisory…</span>
+        </div>
+      )
+    }
+    if (directoryStatus === 'error') {
+      return wrap(
+        <div className="directory-advisors-message">
+          <strong>No se pudo cargar el directorio.</strong>
+          <span>
+            {' '}Ejecuta <code>npm run dev</code> (proxy en puerto 3001) y revisa <code>SUPABASE_URL</code> / <code>SUPABASE_SERVICE_ROLE_KEY</code> en el servidor.
+          </span>
+        </div>
+      )
+    }
+    if (directoryStatus === 'empty') {
+      return wrap(
+        <div className="directory-advisors-message">
+          <span className="directory-advisors-kicker">Directorio Advisory</span>
+          <p>
+            No hay candidatos para mostrar. Si la tabla <code>advisory</code> tiene filas, comprueba que <code>SUPABASE_URL</code> y <code>SUPABASE_SERVICE_ROLE_KEY</code> estén en <code>.env</code> o <code>.env.local</code> (el servidor carga ambos) y reinicia <code>npm run dev</code>. También revisa que no estén todas con <code>activo = false</code> y que la tabla exista en el proyecto correcto.
+          </p>
+        </div>
+      )
+    }
+    return wrap(
+      <>
+        <div className="directory-advisors-top">
+          <span className="directory-advisors-badge"><Users size={13} /> Directorio</span>
+          <h4 className="directory-advisors-title">Advisors sugeridos para este caso</h4>
+          <p className="directory-advisors-sub">Hasta 3 perfiles del directorio, ordenados por ajuste al caso.</p>
+        </div>
+        <ol className="directory-advisors-list">
+          {directoryAdvisors.map((a, i) => (
+            <li key={a.id || `adv-${i}`} className="directory-advisors-item">
+              <span className="directory-advisor-rank">{i + 1}</span>
+              <div className="directory-advisor-body">
+                <div className="directory-advisor-nombre">{a.nombre}</div>
+                {(a.empresa || a.email || a.web) && (
+                  <div className="directory-advisor-contact">
+                    {[a.empresa, a.email, a.web].filter(Boolean).join(' · ')}
+                  </div>
+                )}
+                {(a.bio || a.productos_servicios) && (
+                  <div className="directory-advisor-bio">
+                    {(() => {
+                      const t = (a.bio || a.productos_servicios || '').trim()
+                      return t.length > 240 ? `${t.slice(0, 240)}…` : t
+                    })()}
+                  </div>
+                )}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </>
+    )
+  }
+
   // While generating, show streaming
   if (!done) {
     return (
@@ -287,6 +433,8 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
             {session.presenter} · {session.company || 'Sesión del foro'} · {expertNames.length} consejeros
           </div>
         </div>
+
+        {renderDirectoryAdvisorsPanel()}
 
         {!output && (
           <div className="synthesis-loading">
@@ -361,6 +509,7 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
           <span className="pph-sep">·</span>
           <span className="pph-date">{printDate}</span>
         </div>
+        {renderDirectoryAdvisorsPanel({ printClass: 'directory-advisors-printblock' })}
         {sections.map((sec, i) => (
           <div key={i} className={`plan-section ${sec.title.toUpperCase().includes('CARTA') ? 'plan-section-carta' : ''}`}>
             <div className="plan-section-header">
@@ -393,6 +542,8 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
             {currentSlide + 1} / {totalSlides}
           </div>
         </div>
+
+        {renderDirectoryAdvisorsPanel()}
 
         {/* Current slide */}
         {currentSection && (
@@ -494,6 +645,71 @@ const synthesisStyles = `
   .slide-company {
     font-size: 14px; color: var(--text-muted); font-weight: 500;
   }
+
+  /* Directorio Advisory (siempre visible; no depende del texto que genere el modelo) */
+  .directory-advisors {
+    background: linear-gradient(135deg, var(--accent-dim) 0%, var(--surface) 100%);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 4px;
+  }
+  .directory-advisors-loading {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; color: var(--text-muted);
+  }
+  .directory-advisors-message {
+    font-size: 13px; color: var(--text-muted); line-height: 1.55;
+  }
+  .directory-advisors-message strong { color: var(--text); }
+  .directory-advisors-message code {
+    font-family: var(--font-mono); font-size: 11px;
+    background: var(--surface-2); padding: 1px 5px; border-radius: 3px;
+  }
+  .directory-advisors-kicker {
+    display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 6px;
+  }
+  .directory-advisors-top { margin-bottom: 12px; }
+  .directory-advisors-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--accent);
+    border: 1px solid var(--accent); padding: 3px 8px; border-radius: 4px;
+    margin-bottom: 8px;
+  }
+  .directory-advisors-title {
+    font-family: var(--font-display); font-size: 17px; font-weight: 600;
+    color: var(--text); margin: 0 0 4px 0;
+  }
+  .directory-advisors-sub {
+    font-size: 12px; color: var(--text-dim); margin: 0; line-height: 1.4;
+  }
+  .directory-advisors-list {
+    list-style: none; margin: 0; padding: 0;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .directory-advisors-item {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px;
+  }
+  .directory-advisor-rank {
+    flex-shrink: 0; width: 26px; height: 26px;
+    background: var(--accent); color: #fff; border-radius: 6px;
+    font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .directory-advisor-nombre {
+    font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px;
+  }
+  .directory-advisor-contact {
+    font-size: 12px; color: var(--text-muted); word-break: break-word; margin-bottom: 6px;
+  }
+  .directory-advisor-bio {
+    font-size: 12px; color: var(--text-dim); line-height: 1.5;
+  }
+
   .slide-counter {
     font-family: var(--font-mono); font-size: 14px; color: var(--text-dim);
     background: var(--surface); border: 1px solid var(--border);
@@ -556,6 +772,63 @@ const synthesisStyles = `
     color: var(--gold); letter-spacing: 0.02em; margin: 0;
   }
   .plan-section-content { display: flex; flex-direction: column; gap: 10px; }
+
+  /* Markdown body (Gemini a veces devuelve ** y ### en lugar del formato fijo) */
+  .plan-markdown { display: flex; flex-direction: column; gap: 0.35em; min-width: 0; }
+  .plan-markdown-p { margin: 0 0 0.5em 0; }
+  .plan-markdown-p:last-child { margin-bottom: 0; }
+  .plan-markdown-ul, .plan-markdown-ol {
+    margin: 0.25em 0 0.75em 1.25em;
+    padding: 0;
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.65;
+  }
+  .plan-markdown-li { margin: 0.25em 0; }
+  .plan-md-heading {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0.75em 0 0.35em 0;
+    line-height: 1.3;
+  }
+  .plan-md-heading:first-child { margin-top: 0; }
+  .plan-md-heading-sm {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0.6em 0 0.3em 0;
+  }
+  .plan-md-strong { font-weight: 600; color: var(--text); }
+  .plan-md-em { font-style: italic; }
+  .plan-md-a { color: var(--accent); text-decoration: underline; word-break: break-all; }
+  .plan-md-bq {
+    margin: 0.5em 0;
+    padding: 8px 14px;
+    border-left: 3px solid var(--gold);
+    background: var(--surface-2);
+    font-size: 14px;
+    color: var(--text-muted);
+  }
+  .plan-md-code-inline {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    background: var(--surface-2);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  .plan-md-pre {
+    margin: 0.5em 0;
+    padding: 12px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13px;
+  }
+  .plan-md-hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
+  .plan-md-table-wrap { margin: 0.75em 0; }
 
   /* Table styles */
   .plan-table-wrapper {
@@ -723,6 +996,16 @@ const synthesisStyles = `
       gap: 0 !important;
       padding: 50px 60px 40px !important;
     }
+
+    .print-all-sections .directory-advisors {
+      margin-bottom: 28px !important;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      border: 1px solid #1565c0 !important;
+      background: #f0f7ff !important;
+    }
+    .print-all-sections .directory-advisor-nombre { color: #1a1a2e !important; }
+    .print-all-sections .directory-advisor-bio { color: #555 !important; }
 
     /* ---- COVER PAGE ---- */
     .print-cover {
@@ -936,6 +1219,14 @@ const synthesisStyles = `
       color: #333 !important; font-size: 12px !important;
       line-height: 1.7 !important;
     }
+
+    .plan-markdown .plan-para,
+    .plan-markdown-p,
+    .plan-markdown-li {
+      color: #333 !important; font-size: 12px !important;
+      line-height: 1.7 !important;
+    }
+    .plan-md-heading, .plan-md-heading-sm { color: #1a1a2e !important; }
 
     /* ---- PRINT FOOTER ---- */
     .print-footer {

@@ -123,6 +123,20 @@ DÍAS 61-90: ACELERACIÓN
 1. [acción de escala]
 2. [segunda acción]
 
+## ADVISORS RECOMENDADOS
+NO OMITAS ESTA SECCIÓN si el bloque "CANDIDATOS ADVISORY DESDE BASE DE DATOS" incluye al menos un nombre. Debe aparecer ANTES de "## CARTA DEL CONSEJO" y con el encabezado exacto "## ADVISORS RECOMENDADOS".
+Si recibes el bloque "CANDIDATOS ADVISORY DESDE BASE DE DATOS" con al menos una persona:
+- Recomienda como mínimo 1 y como máximo 3 nombres (nunca más de 3).
+- Solo puedes elegir nombres que aparezcan en ese bloque; no inventes advisors.
+- Si el bloque trae 1 candidato, recomienda 1. Si trae 2 o 3, puedes recomendar 1, 2 o 3 según relevancia, siempre dentro del límite de 3.
+- Ordena del mejor al peor ajuste al caso.
+Para cada advisor recomendado, incluye exactamente:
+1. Nombre del advisor (exactamente como en la lista)
+2. Ajuste (ALTO/MEDIO)
+3. Especialidad clave
+4. Justificación breve (1 oración concreta enfocada en el problema del caso)
+Si el bloque indica que no hay candidatos disponibles, escribe: "Sin candidatos disponibles en la base de datos para este caso."
+
 ## CARTA DEL CONSEJO
 Escribe un párrafo corto (4-5 oraciones) dirigido directamente al presentador, en primera persona del plural ("nosotros, el consejo"). Tono cercano, motivacional pero realista. Reconoce su valentía al presentar el caso, destaca la fortaleza principal que viste, y cierra con una frase de confianza en su capacidad de ejecutar el plan. Firma como "El Consejo — Advisory Business Boards".`
 }

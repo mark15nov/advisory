@@ -11,6 +11,14 @@ npm install
 
 2. Configura tu API key de Anthropic en un proxy o directamente.
 
+### Variables de entorno requeridas
+
+Para esta versión, define en `.env`:
+
+- `GEMINI_API_KEY`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
 > ⚠️ **IMPORTANTE**: Esta app llama a `api.anthropic.com` desde el navegador.
 > Para producción, crea un backend proxy que maneje la API key de forma segura.
 > Para desarrollo local, puedes usar una extensión de Chrome que inyecte el header,

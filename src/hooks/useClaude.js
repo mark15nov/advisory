@@ -1,5 +1,5 @@
 // src/hooks/useClaude.js
-export async function callClaude({ system, messages, onChunk }) {
+export async function callClaude({ system, messages, onChunk, advisoryProfile }) {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 120000)
 
@@ -14,6 +14,7 @@ export async function callClaude({ system, messages, onChunk }) {
         system,
         messages,
         stream: !!onChunk,
+        advisoryProfile,
       }),
       signal: controller.signal,
     })
@@ -50,14 +51,38 @@ export async function callClaude({ system, messages, onChunk }) {
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let fullText = ''
+    let buffer = ''
 
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
-      const chunk = decoder.decode(value)
-      const lines = chunk.split('\n').filter(l => l.startsWith('data: '))
+      buffer += decoder.decode(value, { stream: true })
+
+      const events = buffer.split('\n\n')
+      buffer = events.pop() || ''
+
+      for (const event of events) {
+        const lines = event.split('\n')
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const data = line.slice(6)
+          if (data === '[DONE]') continue
+          try {
+            const parsed = JSON.parse(data)
+            const text = parsed.text || ''
+            if (text) {
+              fullText += text
+              onChunk(text)
+            }
+          } catch {}
+        }
+      }
+    }
+    if (buffer.trim()) {
+      const lines = buffer.split('\n')
       for (const line of lines) {
-        const data = line.replace('data: ', '')
+        if (!line.startsWith('data: ')) continue
+        const data = line.slice(6)
         if (data === '[DONE]') continue
         try {
           const parsed = JSON.parse(data)
