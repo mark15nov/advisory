@@ -21,10 +21,19 @@ loadEnvFromFile('.env.local')
 const app = express()
 app.use(express.json())
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY
+const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || ''
+const ANTHROPIC_MODEL_CANDIDATES = (process.env.ANTHROPIC_MODEL_CANDIDATES || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+const DEFAULT_MODEL_CANDIDATES = [
+  'claude-3-5-sonnet-20240620',
+  'claude-3-haiku-20240307',
+]
 
-if (!GEMINI_API_KEY) {
-  console.error('❌ Falta GEMINI_API_KEY en .env o .env.local')
+if (!ANTHROPIC_API_KEY) {
+  console.error('❌ Falta ANTHROPIC_API_KEY en .env o .env.local')
   process.exit(1)
 }
 
@@ -83,32 +92,97 @@ app.post('/api/advisory-recommendations', async (req, res) => {
   }
 })
 
-async function callGemini(geminiMessages, stream, maxTokens = 8192) {
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GEMINI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gemini-2.5-flash',
-        messages: geminiMessages,
-        max_tokens: maxTokens,
-        temperature: 0.3,
-        stream,
-      }),
-    })
+function toAnthropicMessages(messages) {
+  return (Array.isArray(messages) ? messages : [])
+    .filter((m) => m && (m.role === 'user' || m.role === 'assistant'))
+    .map((m) => ({ role: m.role, content: String(m.content || '') }))
+}
 
-    if (response.status === 429 && attempt < MAX_RETRIES) {
-      const wait = attempt * 5
-      console.log(`Rate limit, reintentando en ${wait}s... (intento ${attempt}/${MAX_RETRIES})`)
-      await new Promise(r => setTimeout(r, wait * 1000))
-      continue
-    }
-
-    return response
+function extractAnthropicErrorMessage(rawError) {
+  try {
+    const parsed = JSON.parse(rawError)
+    return parsed?.error?.message || rawError
+  } catch {
+    return rawError
   }
+}
+
+function parseAnthropicError(rawError) {
+  try {
+    const parsed = JSON.parse(rawError)
+    return {
+      type: parsed?.error?.type || '',
+      message: parsed?.error?.message || rawError,
+    }
+  } catch {
+    return { type: '', message: rawError }
+  }
+}
+
+async function callAnthropic({ system, advisoryContext, messages, stream, maxTokens = 8192 }) {
+  const systemPrompt = [system, advisoryContext].filter(Boolean).join('\n\n')
+  const anthropicMessages = toAnthropicMessages(messages)
+  const modelsToTry = Array.from(new Set([
+    ANTHROPIC_MODEL,
+    ...ANTHROPIC_MODEL_CANDIDATES,
+    ...DEFAULT_MODEL_CANDIDATES,
+  ].filter(Boolean)))
+
+  if (!modelsToTry.length) {
+    throw new Error('No hay modelo configurado. Define ANTHROPIC_MODEL en .env.local')
+  }
+
+  for (const model of modelsToTry) {
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model,
+          system: systemPrompt,
+          messages: anthropicMessages,
+          max_tokens: maxTokens,
+          temperature: 0.3,
+          stream,
+        }),
+      })
+
+      if (response.status === 429 && attempt < MAX_RETRIES) {
+        const wait = attempt * 5
+        console.log(`Rate limit (${model}), reintentando en ${wait}s... (intento ${attempt}/${MAX_RETRIES})`)
+        await new Promise(r => setTimeout(r, wait * 1000))
+        continue
+      }
+      if (response.status === 503 && attempt < MAX_RETRIES) {
+        const wait = attempt * 5
+        console.log(`Anthropic saturado (${model}), reintentando en ${wait}s... (intento ${attempt}/${MAX_RETRIES})`)
+        await new Promise(r => setTimeout(r, wait * 1000))
+        continue
+      }
+      if (response.status === 404) {
+        const rawError = await response.text()
+        const parsed = parseAnthropicError(rawError)
+        if (parsed.type === 'not_found_error' || String(parsed.message).toLowerCase().includes('model:')) {
+          console.log(`Modelo no disponible (${model}), probando siguiente...`)
+          break
+        }
+        return response
+      }
+
+      return response
+    }
+  }
+
+  return new Response(JSON.stringify({
+    error: {
+      type: 'not_found_error',
+      message: `No se encontró un modelo válido en ANTHROPIC_MODEL/ANTHROPIC_MODEL_CANDIDATES. Probados: ${modelsToTry.join(', ')}`,
+    },
+  }), { status: 404, headers: { 'Content-Type': 'application/json' } })
 }
 
 app.post('/api/chat', async (req, res) => {
@@ -116,19 +190,20 @@ app.post('/api/chat', async (req, res) => {
   const advisoryCandidates = await fetchAdvisoryCandidates(advisoryProfile)
   const advisoryContext = buildAdvisoryContext(advisoryCandidates)
 
-  const geminiMessages = [
-    { role: 'system', content: system },
-    { role: 'system', content: advisoryContext },
-    ...messages,
-  ]
-
   try {
-    const response = await callGemini(geminiMessages, !!stream)
+    const response = await callAnthropic({
+      system,
+      advisoryContext,
+      messages,
+      stream: !!stream,
+    })
 
     if (!response.ok) {
-      const err = await response.json()
-      console.error('Gemini error:', JSON.stringify(err))
-      return res.status(response.status).json({ error: { message: err.error?.message || 'Error de Gemini' } })
+      const rawError = await response.text()
+      console.error('Anthropic error:', rawError)
+      return res.status(response.status).json({
+        error: { message: extractAnthropicErrorMessage(rawError) || 'Error de Anthropic' },
+      })
     }
 
     if (stream) {
@@ -153,13 +228,13 @@ app.post('/api/chat', async (req, res) => {
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue
             const data = line.slice(6)
-            if (data === '[DONE]') {
-              res.write('data: [DONE]\n\n')
-              continue
-            }
             try {
               const parsed = JSON.parse(data)
-              const text = parsed.choices?.[0]?.delta?.content || ''
+              if (parsed.type === 'message_stop') {
+                res.write('data: [DONE]\n\n')
+                continue
+              }
+              const text = parsed?.delta?.text || ''
               if (text) {
                 res.write(`data: ${JSON.stringify({ text })}\n\n`)
               }
@@ -172,13 +247,13 @@ app.post('/api/chat', async (req, res) => {
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue
           const data = line.slice(6)
-          if (data === '[DONE]') {
-            res.write('data: [DONE]\n\n')
-            continue
-          }
           try {
             const parsed = JSON.parse(data)
-            const text = parsed.choices?.[0]?.delta?.content || ''
+            if (parsed.type === 'message_stop') {
+              res.write('data: [DONE]\n\n')
+              continue
+            }
+            const text = parsed?.delta?.text || ''
             if (text) {
               res.write(`data: ${JSON.stringify({ text })}\n\n`)
             }
@@ -188,7 +263,10 @@ app.post('/api/chat', async (req, res) => {
       res.end()
     } else {
       const data = await response.json()
-      const text = data.choices?.[0]?.message?.content || ''
+      const text = (data.content || [])
+        .filter((b) => b?.type === 'text')
+        .map((b) => b.text || '')
+        .join('')
       res.json({ text })
     }
   } catch (err) {
@@ -198,5 +276,5 @@ app.post('/api/chat', async (req, res) => {
 })
 
 app.listen(3001, () => {
-  console.log('🔌 Proxy Gemini corriendo en http://localhost:3001')
+  console.log('🔌 Proxy Anthropic corriendo en http://localhost:3001')
 })

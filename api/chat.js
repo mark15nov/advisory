@@ -9,9 +9,18 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: { message: 'Method not allowed' } })
   }
 
-  const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY
+  const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || ''
+  const ANTHROPIC_MODEL_CANDIDATES = (process.env.ANTHROPIC_MODEL_CANDIDATES || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const DEFAULT_MODEL_CANDIDATES = [
+    'claude-3-5-sonnet-20240620',
+    'claude-3-haiku-20240307',
+  ]
 
-  if (!GEMINI_API_KEY) {
+  if (!ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: { message: 'API key no configurada' } })
   }
 
@@ -43,40 +52,76 @@ export default async function handler(req, res) {
   const advisoryCandidates = await fetchAdvisoryCandidates(advisoryProfile)
   const advisoryContext = buildAdvisoryContext(advisoryCandidates)
 
-  const geminiMessages = [
-    { role: 'system', content: system },
-    { role: 'system', content: advisoryContext },
-    ...messages,
-  ]
+  const systemPrompt = [system, advisoryContext].filter(Boolean).join('\n\n')
+  const anthropicMessages = (Array.isArray(messages) ? messages : [])
+    .filter((m) => m && (m.role === 'user' || m.role === 'assistant'))
+    .map((m) => ({ role: m.role, content: String(m.content || '') }))
+  const modelsToTry = Array.from(new Set([
+    ANTHROPIC_MODEL,
+    ...ANTHROPIC_MODEL_CANDIDATES,
+    ...DEFAULT_MODEL_CANDIDATES,
+  ].filter(Boolean)))
 
   try {
+    if (!modelsToTry.length) {
+      return res.status(500).json({ error: { message: 'Define ANTHROPIC_MODEL en el servidor' } })
+    }
+
     let response
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${GEMINI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gemini-2.5-flash',
-          messages: geminiMessages,
-          max_tokens: 8192,
-          temperature: 0.3,
-          stream: !!stream,
-        }),
-      })
-      if (response.status === 429 && attempt < 3) {
-        await new Promise(r => setTimeout(r, attempt * 5000))
-        continue
+    modelLoop: for (const model of modelsToTry) {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model,
+            system: systemPrompt,
+            messages: anthropicMessages,
+            max_tokens: 8192,
+            temperature: 0.3,
+            stream: !!stream,
+          }),
+        })
+        if ((response.status === 429 || response.status === 503) && attempt < 3) {
+          await new Promise(r => setTimeout(r, attempt * 5000))
+          continue
+        }
+        if (response.status === 404) {
+          const rawError = await response.text()
+          let parsed = null
+          try { parsed = JSON.parse(rawError) } catch {}
+          const errType = parsed?.error?.type || ''
+          const errMsg = parsed?.error?.message || ''
+          if (errType === 'not_found_error' || String(errMsg).toLowerCase().includes('model:')) {
+            break
+          }
+          return res.status(404).json({
+            error: { message: errMsg || rawError || 'Error de Anthropic' },
+          })
+        }
+        break modelLoop
       }
-      break
+      response = undefined
+    }
+
+    if (!response) {
+      return res.status(404).json({
+        error: { message: `No se encontró un modelo válido. Probados: ${modelsToTry.join(', ')}` },
+      })
     }
 
     if (!response.ok) {
-      const err = await response.json()
-      console.error('Gemini error:', JSON.stringify(err))
-      return res.status(response.status).json({ error: { message: err.error?.message || 'Error de Gemini' } })
+      const rawError = await response.text()
+      let parsedError = null
+      try { parsedError = JSON.parse(rawError) } catch {}
+      console.error('Anthropic error:', rawError)
+      return res.status(response.status).json({
+        error: { message: parsedError?.error?.message || rawError || 'Error de Anthropic' },
+      })
     }
 
     if (stream) {
@@ -101,13 +146,13 @@ export default async function handler(req, res) {
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue
             const data = line.slice(6)
-            if (data === '[DONE]') {
-              res.write('data: [DONE]\n\n')
-              continue
-            }
             try {
               const parsed = JSON.parse(data)
-              const text = parsed.choices?.[0]?.delta?.content || ''
+              if (parsed.type === 'message_stop') {
+                res.write('data: [DONE]\n\n')
+                continue
+              }
+              const text = parsed?.delta?.text || ''
               if (text) {
                 res.write(`data: ${JSON.stringify({ text })}\n\n`)
               }
@@ -120,13 +165,13 @@ export default async function handler(req, res) {
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue
           const data = line.slice(6)
-          if (data === '[DONE]') {
-            res.write('data: [DONE]\n\n')
-            continue
-          }
           try {
             const parsed = JSON.parse(data)
-            const text = parsed.choices?.[0]?.delta?.content || ''
+            if (parsed.type === 'message_stop') {
+              res.write('data: [DONE]\n\n')
+              continue
+            }
+            const text = parsed?.delta?.text || ''
             if (text) {
               res.write(`data: ${JSON.stringify({ text })}\n\n`)
             }
@@ -136,7 +181,10 @@ export default async function handler(req, res) {
       res.end()
     } else {
       const data = await response.json()
-      const text = data.choices?.[0]?.message?.content || ''
+      const text = (data.content || [])
+        .filter((b) => b?.type === 'text')
+        .map((b) => b.text || '')
+        .join('')
       res.json({ text })
     }
   } catch (err) {
