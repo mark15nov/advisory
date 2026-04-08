@@ -156,15 +156,28 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
     onDone(streamed)
   }
 
+  const CANONICAL_ORDER = [
+    'SCORECARD',
+    'DIAGNÓSTICO',
+    'TABLA COMPARATIVA',
+    'PLAN DE ACCIÓN',
+    'PROYECCIÓN DE IMPACTO',
+    'MÉTRICAS DE ÉXITO',
+    'RIESGOS Y MITIGACIONES',
+    'HOJA DE RUTA',
+    'ADVISORS RECOMENDADOS',
+    'CARTA DEL CONSEJO',
+  ]
+
   const sectionIcons = {
     'SCORECARD': '01',
     'DIAGNÓSTICO': '02',
-    'TABLA COMPARATIVA: CONSEJO vs IA': '03',
+    'TABLA COMPARATIVA': '03',
     'PLAN DE ACCIÓN': '04',
     'PROYECCIÓN DE IMPACTO': '05',
     'MÉTRICAS DE ÉXITO': '06',
     'RIESGOS Y MITIGACIONES': '07',
-    'HOJA DE RUTA: 90 DÍAS': '08',
+    'HOJA DE RUTA': '08',
     'ADVISORS RECOMENDADOS': '09',
     'CARTA DEL CONSEJO': '10',
   }
@@ -253,15 +266,39 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
     )
   }
 
-  function sectionNumForTitle(title, i) {
-    const u = title.toUpperCase()
-    for (const key of Object.keys(sectionIcons)) {
-      if (u.includes(key)) return sectionIcons[key]
-    }
-    return String(i + 1).padStart(2, '0')
+  function normalizeTitle(title) {
+    return title
+      .toUpperCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
   }
 
-  /** Parte por ## / ### (y #) al inicio de línea; compatible con modelos que no siguen el formato fijo. */
+  function sectionNumForTitle(title) {
+    const u = normalizeTitle(title)
+    for (const key of Object.keys(sectionIcons)) {
+      const k = normalizeTitle(key)
+      if (u.includes(k)) return sectionIcons[key]
+    }
+    return null
+  }
+
+  function canonicalIndex(title) {
+    const u = normalizeTitle(title)
+    for (let i = 0; i < CANONICAL_ORDER.length; i++) {
+      const k = normalizeTitle(CANONICAL_ORDER[i])
+      if (u.startsWith(k)) {
+        const rest = u.slice(k.length).trim()
+        // Permite sufijos cortos que no comiencen con dígito (sub-items enumerados: "1:", "2.")
+        // Ejemplos válidos: "EJECUTIVO", ": 90 DIAS", ": CONSEJO VS IA"
+        // Ejemplos rechazados: "1: DIAGNOSTICO INTEGRAL", "2. VALIDACION DE MERCADO"
+        if (rest.length <= 16 && !/^\d/.test(rest)) return i
+      }
+    }
+    return CANONICAL_ORDER.length
+  }
+
+  /** Parte solo por encabezados de nivel ## (secciones principales); ## preserva subtítulos internos. */
   function parseSections(text) {
     if (!text || !text.trim()) return []
     const rawLines = text.replace(/\r\n/g, '\n').split('\n')
@@ -279,20 +316,34 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
     }
 
     for (const line of rawLines) {
-      const m = line.match(/^(#{1,6})\s+(.+)$/)
-      if (m) {
+      // Solo crea nueva sección si el encabezado ## coincide con un nombre canónico conocido;
+      // sub-encabezados no canónicos (ej. "## 1. Acción") quedan como contenido de la sección actual.
+      const m = line.match(/^#{1,2}\s+(.+)$/)
+      if (m && canonicalIndex(m[1].trim()) < CANONICAL_ORDER.length) {
         flush()
-        currentTitle = m[2].trim()
+        currentTitle = m[1].trim()
       } else {
         currentLines.push(line)
       }
     }
     flush()
 
-    return blocks.map((b, i) => ({
+    const mapped = blocks.map((b) => ({
       title: b.title,
       content: b.content,
-      num: sectionNumForTitle(b.title, i),
+      num: sectionNumForTitle(b.title),
+    }))
+
+    // Solo ordenar cuando el streaming terminó; durante streaming el sort
+    // causaría parpadeo por reordenamientos continuos con key={sec.title}.
+    if (done) {
+      mapped.sort((a, b) => canonicalIndex(a.title) - canonicalIndex(b.title))
+    }
+
+    // Asignar número de sección según posición final
+    return mapped.map((s, i) => ({
+      ...s,
+      num: s.num ?? String(i + 1).padStart(2, '0'),
       index: i,
     }))
   }
@@ -422,42 +473,54 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
     )
   }
 
-  // While generating, show streaming
+  // While generating, show full-screen loader
   if (!done) {
+    const completedSections = sections.length
+    const totalExpected = CANONICAL_ORDER.length
+    const progress = Math.min(Math.round((completedSections / totalExpected) * 100), 95)
+
+    const loadingMessages = [
+      'Analizando el caso y las respuestas del diagnóstico…',
+      'Sintetizando opiniones del consejo…',
+      'Construyendo tabla comparativa Consejo vs IA…',
+      'Redactando plan de acción ejecutivo…',
+      'Calculando proyección de impacto…',
+      'Definiendo métricas de éxito…',
+      'Identificando riesgos y mitigaciones…',
+      'Armando hoja de ruta de 90 días…',
+      'Seleccionando advisors recomendados…',
+      'Redactando carta del consejo…',
+    ]
+    const messageIndex = Math.min(completedSections, loadingMessages.length - 1)
+    const currentMessage = loadingMessages[messageIndex]
+
     return (
-      <div className="synthesis-root">
-        <div className="screen-header">
-          <div className="screen-badge"><Sparkles size={13} /> GENERANDO PLAN</div>
-          <h2 className="screen-title">Plan de acción ejecutivo</h2>
-          <div className="screen-meta">
-            {session.presenter} · {session.company || 'Sesión del foro'} · {expertNames.length} consejeros
+      <div className="synthesis-root synthesis-loader-root">
+        <div className="synthesis-fullloader">
+          <div className="sfl-icon">
+            <Loader2 size={44} className="sfl-spinner" />
+            <Sparkles size={18} className="sfl-sparkle" />
           </div>
-        </div>
-
-        {renderDirectoryAdvisorsPanel()}
-
-        {!output && (
-          <div className="synthesis-loading">
-            <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} />
-            <span>Sintetizando opiniones y generando plan...</span>
+          <div className="sfl-texts">
+            <h2 className="sfl-title">Generando plan de acción</h2>
+            <p className="sfl-sub">{session.presenter} · {session.company || 'Sesión del foro'}</p>
           </div>
-        )}
-
-        {output && (
-          <div className="plan-output-streaming">
-            {sections.map((sec, i) => (
-              <div key={i} className={`plan-section ${sec.title.toUpperCase().includes('CARTA') ? 'plan-section-carta' : ''}`}>
-                <div className="plan-section-header">
-                  <span className="plan-section-num">{sec.num}</span>
-                  <h3 className="plan-section-title">{sec.title}</h3>
-                </div>
-                {renderSectionContent(sec.title, sec.content)}
+          <div className="sfl-progress-wrap">
+            <div className="sfl-progress-bar">
+              <div className="sfl-progress-fill" style={{ width: `${progress}%` }} />
+            </div>
+            <span className="sfl-progress-pct">{progress}%</span>
+          </div>
+          <p className="sfl-message">{currentMessage}</p>
+          <div className="sfl-steps">
+            {CANONICAL_ORDER.map((name, i) => (
+              <div key={name} className={`sfl-step ${i < completedSections ? 'sfl-step-done' : i === completedSections ? 'sfl-step-active' : ''}`}>
+                <span className="sfl-step-dot" />
+                <span className="sfl-step-label">{name}</span>
               </div>
             ))}
-            <span className="synthesis-cursor">|</span>
           </div>
-        )}
-
+        </div>
         <style>{synthesisStyles}</style>
       </div>
     )
@@ -605,6 +668,8 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
 const synthesisStyles = `
   @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
   @keyframes blink { 0%,100% { opacity: 1 } 50% { opacity: 0 } }
+  @keyframes progressPulse { 0%,100% { opacity: 1 } 50% { opacity: 0.7 } }
+  @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
 
   /* ===== SCREEN STYLES ===== */
   .synthesis-root {
@@ -612,7 +677,89 @@ const synthesisStyles = `
     max-width: 900px; margin: 0 auto; padding: 40px 24px;
     height: 100%; overflow-y: auto;
   }
+  .synthesis-loader-root {
+    display: flex; align-items: center; justify-content: center;
+    max-width: 100%; padding: 0; height: 100%; overflow: hidden;
+  }
   .print-cover, .print-page-header, .print-footer, .print-all-sections { display: none; }
+
+  /* Full-screen loader */
+  .synthesis-fullloader {
+    display: flex; flex-direction: column; align-items: center; gap: 24px;
+    max-width: 480px; width: 100%; padding: 48px 32px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; text-align: center;
+    animation: fadeInUp 0.4s ease;
+  }
+  .sfl-icon {
+    position: relative; width: 72px; height: 72px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .sfl-spinner {
+    color: var(--gold);
+    animation: spin 1.2s linear infinite;
+  }
+  .sfl-sparkle {
+    position: absolute; bottom: 4px; right: 4px;
+    color: var(--accent); opacity: 0.8;
+  }
+  .sfl-texts { display: flex; flex-direction: column; gap: 6px; }
+  .sfl-title {
+    font-family: var(--font-display); font-size: 22px; font-weight: 700;
+    color: var(--text); margin: 0;
+  }
+  .sfl-sub { font-size: 13px; color: var(--text-muted); margin: 0; }
+
+  .sfl-progress-wrap {
+    width: 100%; display: flex; align-items: center; gap: 10px;
+  }
+  .sfl-progress-bar {
+    flex: 1; height: 6px; background: var(--border);
+    border-radius: 99px; overflow: hidden;
+  }
+  .sfl-progress-fill {
+    height: 100%; background: var(--gold);
+    border-radius: 99px;
+    transition: width 0.6s ease;
+    animation: progressPulse 2s ease-in-out infinite;
+  }
+  .sfl-progress-pct {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted); min-width: 32px; text-align: right;
+  }
+
+  .sfl-message {
+    font-size: 13px; color: var(--text-muted); margin: 0;
+    min-height: 20px; transition: opacity 0.3s;
+    font-style: italic;
+  }
+
+  .sfl-steps {
+    width: 100%; display: flex; flex-direction: column; gap: 6px;
+    text-align: left; max-height: 220px; overflow: hidden;
+  }
+  .sfl-step {
+    display: flex; align-items: center; gap: 10px;
+    opacity: 0.3; transition: opacity 0.4s;
+  }
+  .sfl-step-done { opacity: 0.5; }
+  .sfl-step-active { opacity: 1; }
+  .sfl-step-dot {
+    flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--border); transition: background 0.4s;
+  }
+  .sfl-step-done .sfl-step-dot { background: var(--green); }
+  .sfl-step-active .sfl-step-dot {
+    background: var(--gold);
+    box-shadow: 0 0 6px var(--gold);
+    animation: progressPulse 1s ease-in-out infinite;
+  }
+  .sfl-step-label {
+    font-size: 12px; color: var(--text-muted);
+    font-family: var(--font-body); letter-spacing: 0.02em;
+  }
+  .sfl-step-active .sfl-step-label { color: var(--text); font-weight: 600; }
+  .sfl-step-done .sfl-step-label { text-decoration: line-through; }
 
   .screen-header { display: flex; flex-direction: column; gap: 10px; }
   .screen-badge {
@@ -629,7 +776,7 @@ const synthesisStyles = `
     color: var(--text-muted); font-size: 14px; padding: 40px 0;
   }
 
-  /* Streaming output */
+  /* Streaming output (hidden — kept for reference but not shown during load) */
   .plan-output-streaming { display: flex; flex-direction: column; gap: 20px; padding-bottom: 40px; }
 
   /* Slide container */
