@@ -90,8 +90,10 @@ Usa EXACTAMENTE este formato de tabla markdown:
 Después de la tabla, escribe 2-3 oraciones de análisis sobre dónde coinciden y dónde difieren las opiniones.
 
 ## PLAN DE ACCIÓN
+Usa EXACTAMENTE este encabezado de sección: "## PLAN DE ACCIÓN" — sin añadir palabras como "ejecutivo", "ejecutiva" ni otros sufijos al título.
 IMPORTANTE: Este plan debe construirse a partir de las CONCLUSIONES de la tabla comparativa. Toma los puntos donde hubo coincidencia alta como prioridades, y donde hubo coincidencia baja, elige la recomendación más fuerte y justifica por qué. Combina lo mejor de lo que dijeron los consejeros con lo mejor del análisis de IA para crear un plan superior a lo que cualquiera de los dos haría solo.
-3-5 acciones numeradas. Cada una en 1-2 oraciones con: qué hacer, en qué plazo, y el COSTO ESTIMADO en pesos mexicanos.
+EXACTAMENTE 3 acciones numeradas (1., 2., 3.). No escribas una cuarta acción ni más de tres. Cada acción en 1-2 oraciones con: qué hacer, en qué plazo, y el COSTO ESTIMADO en pesos mexicanos.
+NO repitas el nombre de la empresa como título o subtítulo al inicio de esta sección (ni en negrita ni como encabezado); ve directo a las acciones numeradas.
 
 ## PROYECCIÓN DE IMPACTO
 Estima el impacto económico y de negocio si se ejecuta el plan completo. TODOS los montos en pesos mexicanos (MXN). Incluye:
@@ -125,6 +127,13 @@ DÍAS 61-90: ACELERACIÓN
 
 ## ADVISORS RECOMENDADOS
 NO OMITAS ESTA SECCIÓN si el bloque "CANDIDATOS ADVISORY DESDE BASE DE DATOS" incluye al menos un nombre. Debe aparecer ANTES de "## CARTA DEL CONSEJO" y con el encabezado exacto "## ADVISORS RECOMENDADOS".
+
+REGLA ANTI-CONTRADICCIÓN (OBLIGATORIA):
+- El bloque "CANDIDATOS ADVISORY DESDE BASE DE DATOS" es la ÚNICA fuente de nombres para esta sección. Son personas del directorio Advisory (Supabase), no los participantes del foro.
+- Los nombres que aparecen en "## OPINIONES DEL CONSEJO" son miembros del consejo de la sesión en vivo: NO los trates como candidatos del directorio ni los mezcles con "CANDIDATOS ADVISORY DESDE BASE DE DATOS".
+- Si el bloque lista una o más personas numeradas (1. Nombre…), entonces SÍ hay candidatos en base de datos: NO escribas "Sin candidatos disponibles en la base de datos para este caso." Recomienda solo entre esos nombres, según las reglas de abajo.
+- Si el bloque dice explícitamente "Sin candidatos disponibles" (y no lista personas), entonces escribe únicamente: "Sin candidatos disponibles en la base de datos para este caso." y no enumeres a nadie ni hables de "candidatos preseleccionados" tomados del consejo.
+
 Si recibes el bloque "CANDIDATOS ADVISORY DESDE BASE DE DATOS" con al menos una persona:
 - Recomienda como mínimo 1 y como máximo 3 nombres (nunca más de 3).
 - Solo puedes elegir nombres que aparezcan en ese bloque; no inventes advisors.
@@ -135,7 +144,6 @@ Para cada advisor recomendado, incluye exactamente:
 2. Ajuste (ALTO/MEDIO)
 3. Especialidad clave
 4. Justificación breve (1 oración concreta enfocada en el problema del caso)
-Si el bloque indica que no hay candidatos disponibles, escribe: "Sin candidatos disponibles en la base de datos para este caso."
 
 ## CARTA DEL CONSEJO
 Escribe un párrafo corto (4-5 oraciones) dirigido directamente al presentador, en primera persona del plural ("nosotros, el consejo"). Tono cercano, motivacional pero realista. Reconoce su valentía al presentar el caso, destaca la fortaleza principal que viste, y cierra con una frase de confianza en su capacidad de ejecutar el plan. Firma como "El Consejo — Advisory Business Boards".`

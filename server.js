@@ -4,6 +4,7 @@ import {
   scoreAdvisoryRows,
   pickTopAdvisoryCandidates,
   buildAdvisoryContext,
+  normalizeClientAdvisoryCandidates,
 } from './src/lib/advisoryPick.js'
 
 function loadEnvFromFile(relPath) {
@@ -186,8 +187,10 @@ async function callAnthropic({ system, advisoryContext, messages, stream, maxTok
 }
 
 app.post('/api/chat', async (req, res) => {
-  const { system, messages, stream, advisoryProfile } = req.body
-  const advisoryCandidates = await fetchAdvisoryCandidates(advisoryProfile)
+  const { system, messages, stream, advisoryProfile, advisoryCandidatesFromClient } = req.body
+  const advisoryCandidates = Array.isArray(advisoryCandidatesFromClient)
+    ? normalizeClientAdvisoryCandidates(advisoryCandidatesFromClient)
+    : await fetchAdvisoryCandidates(advisoryProfile)
   const advisoryContext = buildAdvisoryContext(advisoryCandidates)
 
   try {

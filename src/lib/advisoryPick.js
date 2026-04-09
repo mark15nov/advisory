@@ -72,6 +72,50 @@ export function pickTopAdvisoryCandidates(sortedRows) {
   return sortedRows.slice(0, n)
 }
 
+/**
+ * Candidatos enviados por el cliente (misma lista que el panel de directorio).
+ * Filtra y limita tamaño para el contexto del modelo; no sustituye validación de negocio.
+ */
+export function normalizeClientAdvisoryCandidates(arr) {
+  if (!Array.isArray(arr)) return []
+  const str = (v, max = 4000) => {
+    if (v == null) return ''
+    const s = String(v).trim()
+    return s.length > max ? s.slice(0, max) : s
+  }
+  const stringArray = (v) => {
+    if (!Array.isArray(v)) return []
+    return v.map((x) => str(String(x), 200)).filter(Boolean).slice(0, 80)
+  }
+
+  return arr
+    .slice(0, ADVISORY_PICK_MAX)
+    .map((row) => {
+      if (!row || typeof row !== 'object') return null
+      const nombre = str(row.nombre, 500)
+      if (!nombre) return null
+      return {
+        nombre,
+        empresa: str(row.empresa, 500),
+        web: str(row.web, 500),
+        email: str(row.email, 320),
+        bio: str(row.bio, 4000),
+        productos_servicios: str(row.productos_servicios, 4000),
+        especialidades: stringArray(row.especialidades),
+        industrias: stringArray(row.industrias),
+        ubicacion: str(row.ubicacion, 500),
+        experiencia_anios: Number.isFinite(Number(row.experiencia_anios))
+          ? Math.min(99, Math.max(0, Number(row.experiencia_anios)))
+          : undefined,
+        score: Number.isFinite(Number(row.score))
+          ? Number(row.score)
+          : (Number.isFinite(Number(row.fitScore)) ? Number(row.fitScore) : undefined),
+        activo: true,
+      }
+    })
+    .filter(Boolean)
+}
+
 export function buildAdvisoryContext(candidates) {
   if (!candidates.length) {
     return [
