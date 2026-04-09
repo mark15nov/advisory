@@ -1210,7 +1210,7 @@ const synthesisStyles = `
       print-color-adjust: exact !important;
     }
 
-    @page { margin: 3cm 2cm; size: letter; }
+    @page { margin: 2cm 1.8cm; size: letter; }
 
     html, body, #root, main {
       background: white !important;
@@ -1238,7 +1238,7 @@ const synthesisStyles = `
       display: flex !important;
       flex-direction: column !important;
       gap: 0 !important;
-      padding: 50px 60px 40px !important;
+      padding: 36px 42px 28px !important;
     }
 
     .print-all-sections .plan-section .directory-advisors {
@@ -1276,7 +1276,7 @@ const synthesisStyles = `
       display: flex;
       flex-direction: column;
       justify-content: center;
-      padding: 60px 80px;
+      padding: 44px 56px;
     }
     .cover-badge {
       font-size: 12px; font-weight: 700; letter-spacing: 0.25em;
@@ -1285,16 +1285,16 @@ const synthesisStyles = `
       display: inline-block; align-self: flex-start; margin-bottom: 24px;
     }
     .cover-title {
-      font-family: var(--font-display); font-size: 48px; font-weight: 700;
+      font-family: var(--font-display); font-size: 42px; font-weight: 700;
       color: white !important; line-height: 1.15; margin: 0 0 20px 0;
     }
     .cover-divider { width: 60px; height: 4px; background: var(--red) !important; margin-bottom: 24px; border-radius: 2px; }
     .cover-company {
-      font-size: 22px; font-weight: 600; color: #9ba4b8 !important;
+      font-size: 20px; font-weight: 600; color: #afb7c9 !important;
       margin-bottom: 16px;
     }
     .cover-problem {
-      font-size: 14px; color: #6b7590 !important; line-height: 1.7;
+      font-size: 13px; color: #8390ad !important; line-height: 1.7;
       font-style: italic; max-width: 500px; margin-bottom: 40px;
     }
     .cover-meta-grid {
@@ -1305,7 +1305,7 @@ const synthesisStyles = `
     .cover-meta-label { font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #6b7590 !important; }
     .cover-meta-value { font-size: 13px; color: #9ba4b8 !important; }
     .cover-footer {
-      display: flex; justify-content: space-between; padding: 20px 80px;
+      display: flex; justify-content: space-between; padding: 16px 56px;
       border-top: 1px solid rgba(255,255,255,0.08);
       font-size: 10px; color: #6b7590 !important; letter-spacing: 0.08em;
     }
@@ -1327,11 +1327,11 @@ const synthesisStyles = `
       background: white !important;
       border: none !important;
       border-radius: 0 !important;
-      padding: 0 0 28px 0 !important;
-      margin-bottom: 28px;
+      padding: 0 0 22px 0 !important;
+      margin-bottom: 22px;
       border-bottom: 1px solid #e0e0e0 !important;
-      page-break-inside: auto;
-      break-inside: auto;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
     .plan-section:last-child {
       border-bottom: none !important;
@@ -1354,7 +1354,7 @@ const synthesisStyles = `
 
     .plan-section-title {
       color: #1a1a2e !important;
-      font-size: 16px !important;
+      font-size: 17px !important;
       font-weight: 700 !important;
       letter-spacing: 0.04em !important;
     }
@@ -1364,19 +1364,21 @@ const synthesisStyles = `
     }
 
     .plan-para {
-      color: #333 !important; font-size: 12px !important; line-height: 1.7 !important;
+      color: #333 !important; font-size: 11.5pt !important; line-height: 1.6 !important;
       overflow: visible !important; white-space: normal !important;
       word-wrap: break-word !important; overflow-wrap: break-word !important;
+      orphans: 3;
+      widows: 3;
     }
 
     .plan-numbered {
-      color: #333 !important; font-size: 12px !important; line-height: 1.7 !important;
+      color: #333 !important; font-size: 11.5pt !important; line-height: 1.6 !important;
       gap: 10px !important;
       page-break-inside: avoid;
       break-inside: avoid;
     }
     .plan-num-text {
-      color: #333 !important; font-size: 12px !important;
+      color: #333 !important; font-size: 11.5pt !important;
       overflow: visible !important; white-space: normal !important;
       word-wrap: break-word !important; overflow-wrap: break-word !important;
     }
@@ -1388,7 +1390,7 @@ const synthesisStyles = `
     }
 
     .plan-bullet {
-      color: #333 !important; font-size: 12px !important; line-height: 1.7 !important;
+      color: #333 !important; font-size: 11.5pt !important; line-height: 1.6 !important;
       overflow: visible !important; white-space: normal !important;
       word-wrap: break-word !important; overflow-wrap: break-word !important;
       page-break-inside: avoid;
@@ -1401,19 +1403,22 @@ const synthesisStyles = `
       border: 1px solid #ccc !important;
       border-radius: 0 !important;
       overflow: visible !important;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
-    .plan-table { font-size: 10px !important; }
+    .plan-table { font-size: 10.5pt !important; }
     .plan-table th {
       background: #1a1a2e !important;
       color: white !important;
       padding: 8px 10px !important;
-      font-size: 9px !important;
+      font-size: 9.5pt !important;
+      letter-spacing: 0.03em !important;
     }
     .plan-table td {
-      padding: 8px 10px !important;
+      padding: 9px 10px !important;
       color: #333 !important;
       border-bottom: 1px solid #ddd !important;
-      font-size: 10px !important;
+      font-size: 10.5pt !important;
       line-height: 1.5 !important;
     }
     .plan-table tr:nth-child(even) td {
@@ -1427,6 +1432,8 @@ const synthesisStyles = `
     .scorecard-grid {
       grid-template-columns: repeat(3, 1fr) !important;
       gap: 12px !important;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
     .scorecard-item {
       background: #f8f8f8 !important;
@@ -1442,9 +1449,13 @@ const synthesisStyles = `
     /* Timeline print */
     .timeline-container {
       grid-template-columns: repeat(3, 1fr) !important;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
     .timeline-block {
       border: 1px solid #ccc !important;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
     .timeline-header {
       padding: 10px 12px !important;
@@ -1468,15 +1479,17 @@ const synthesisStyles = `
     .plan-markdown .plan-para,
     .plan-markdown-p,
     .plan-markdown-li {
-      color: #333 !important; font-size: 12px !important;
-      line-height: 1.7 !important;
+      color: #333 !important; font-size: 11.5pt !important;
+      line-height: 1.6 !important;
+      orphans: 3;
+      widows: 3;
     }
     .plan-md-heading, .plan-md-heading-sm { color: #1a1a2e !important; }
 
     /* ---- PRINT FOOTER ---- */
     .print-footer {
       display: block !important;
-      padding: 0 60px 40px;
+      padding: 0 42px 26px;
     }
     .print-footer-line {
       border-top: 2px solid #1a1a2e; margin-bottom: 12px;
