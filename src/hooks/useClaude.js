@@ -1,5 +1,11 @@
 // src/hooks/useClaude.js
-export async function callClaude({ system, messages, onChunk, advisoryProfile }) {
+export async function callClaude({
+  system,
+  messages,
+  onChunk,
+  advisoryProfile,
+  advisoryCandidatesFromClient,
+}) {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 120000)
 
@@ -15,6 +21,9 @@ export async function callClaude({ system, messages, onChunk, advisoryProfile })
         messages,
         stream: !!onChunk,
         advisoryProfile,
+        ...(Array.isArray(advisoryCandidatesFromClient)
+          ? { advisoryCandidatesFromClient }
+          : {}),
       }),
       signal: controller.signal,
     })

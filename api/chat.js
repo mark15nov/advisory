@@ -2,6 +2,7 @@ import {
   scoreAdvisoryRows,
   pickTopAdvisoryCandidates,
   buildAdvisoryContext,
+  normalizeClientAdvisoryCandidates,
 } from '../src/lib/advisoryPick.js'
 
 export default async function handler(req, res) {
@@ -24,7 +25,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: { message: 'API key no configurada' } })
   }
 
-  const { system, messages, stream, advisoryProfile } = req.body
+  const { system, messages, stream, advisoryProfile, advisoryCandidatesFromClient } = req.body
 
   async function fetchAdvisoryCandidates(profile) {
     const SUPABASE_URL = process.env.SUPABASE_URL
@@ -49,7 +50,9 @@ export default async function handler(req, res) {
     return pickTopAdvisoryCandidates(sorted)
   }
 
-  const advisoryCandidates = await fetchAdvisoryCandidates(advisoryProfile)
+  const advisoryCandidates = Array.isArray(advisoryCandidatesFromClient)
+    ? normalizeClientAdvisoryCandidates(advisoryCandidatesFromClient)
+    : await fetchAdvisoryCandidates(advisoryProfile)
   const advisoryContext = buildAdvisoryContext(advisoryCandidates)
 
   const systemPrompt = [system, advisoryContext].filter(Boolean).join('\n\n')

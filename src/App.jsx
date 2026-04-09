@@ -130,7 +130,7 @@ function SessionTimer({ startTime, paused, elapsedWhenPaused, onTogglePause }) {
 
 export default function App() {
   const saved = loadSaved()
-  const [view, setView] = useState(saved?.phase && saved.phase !== PHASES.SETUP ? 'session' : 'dashboard')
+  const [view, setView] = useState('dashboard')
   const [phase, setPhase] = useState(saved?.phase ?? PHASES.SETUP)
   const [session, setSession] = useState(saved?.session ?? null)
   const [questionHistory, setQuestionHistory] = useState(saved?.questionHistory ?? [])

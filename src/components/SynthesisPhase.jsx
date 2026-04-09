@@ -45,14 +45,69 @@ const markdownComponents = {
   hr: () => <hr className="plan-md-hr" />,
 }
 
+function normCompanyHeadingText(s) {
+  return s
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/[–—−]/g, '-')
+}
+
+function lineMatchesCompanyHeading(line, companyNorm) {
+  if (!companyNorm) return false
+  const raw = line.trim()
+  const stripMd = (t) => t.replace(/\*\*/g, '').replace(/#+\s*$/, '').trim()
+
+  const hm = raw.match(/^#{1,6}\s+(.+)$/)
+  if (hm) {
+    const inner = normCompanyHeadingText(stripMd(hm[1]))
+    if (inner === companyNorm) return true
+    if (companyNorm.length >= 3 && inner.startsWith(`${companyNorm} -`)) return true
+    return false
+  }
+
+  const boldm = raw.match(/^\*\*(.+)\*\*\s*$/)
+  if (boldm) {
+    const inner = normCompanyHeadingText(boldm[1])
+    if (inner === companyNorm) return true
+    if (companyNorm.length >= 3 && inner.startsWith(`${companyNorm} -`)) return true
+    return false
+  }
+
+  const plain = normCompanyHeadingText(stripMd(raw))
+  if (plain === companyNorm) return true
+  if (companyNorm.length >= 3 && plain.startsWith(`${companyNorm} -`)) return true
+  return false
+}
+
+/** Quita título duplicado de empresa al inicio del markdown (sección Plan de acción). */
+function stripRedundantCompanyHeadingMarkdown(markdown, company) {
+  if (!markdown?.trim() || !company?.trim()) return markdown
+  const companyNorm = normCompanyHeadingText(company)
+  if (!companyNorm) return markdown
+
+  const lines = markdown.replace(/\r\n/g, '\n').split('\n')
+  let i = 0
+  while (i < lines.length && lines[i].trim() === '') i++
+  if (i >= lines.length) return markdown
+  if (!lineMatchesCompanyHeading(lines[i], companyNorm)) return markdown
+
+  i++
+  while (i < lines.length && lines[i].trim() === '') i++
+  if (i < lines.length && /^(\*{3,}|-{3,}|_{3,})\s*$/.test(lines[i].trim())) i++
+
+  const rest = lines.slice(i).join('\n').trim()
+  return rest.length ? rest : markdown
+}
+
 export default function SynthesisPhase({ session, questionHistory, experts, onDone }) {
   const [output, setOutput] = useState('')
   const [done, setDone] = useState(false)
   const [currentSlide, setCurrentSlide] = useState(0)
   const [directoryAdvisors, setDirectoryAdvisors] = useState([])
   const [directoryStatus, setDirectoryStatus] = useState('loading')
-
-  useEffect(() => { generate() }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -67,6 +122,7 @@ export default function SynthesisPhase({ session, questionHistory, experts, onDo
     }
     setDirectoryStatus('loading')
     ;(async () => {
+      let list = []
       try {
         const r = await fetch('/api/advisory-recommendations', {
           method: 'POST',
@@ -77,18 +133,20 @@ export default function SynthesisPhase({ session, questionHistory, experts, onDo
         if (!r.ok) {
           setDirectoryAdvisors([])
           setDirectoryStatus('error')
-          return
+        } else {
+          const data = await r.json()
+          list = Array.isArray(data.candidates) ? data.candidates : []
+          setDirectoryAdvisors(list)
+          setDirectoryStatus(list.length ? 'ok' : 'empty')
         }
-        const data = await r.json()
-        const list = Array.isArray(data.candidates) ? data.candidates : []
-        setDirectoryAdvisors(list)
-        setDirectoryStatus(list.length ? 'ok' : 'empty')
       } catch {
         if (!cancelled) {
           setDirectoryAdvisors([])
           setDirectoryStatus('error')
         }
       }
+      if (cancelled) return
+      await generate(list, () => cancelled)
     })()
     return () => { cancelled = true }
   }, [
@@ -101,7 +159,7 @@ export default function SynthesisPhase({ session, questionHistory, experts, onDo
     session.differentiation,
   ])
 
-  async function generate() {
+  async function generate(advisoryCandidatesFromClient, isCancelled) {
     const expertSummary = experts
       .filter(e => e.name && e.opinion)
       .map(e => `**${e.name}${e.role ? ` (${e.role})` : ''}:** ${e.opinion}`)
@@ -150,8 +208,13 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
         whatYouDo: session.whatYouDo || '',
         differentiation: session.differentiation || '',
       },
-      onChunk: (chunk) => { streamed += chunk; setOutput(streamed) },
+      advisoryCandidatesFromClient,
+      onChunk: (chunk) => {
+        streamed += chunk
+        if (!isCancelled?.()) setOutput(streamed)
+      },
     })
+    if (isCancelled?.()) return
     setDone(true)
     onDone(streamed)
   }
@@ -298,6 +361,18 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
     return CANONICAL_ORDER.length
   }
 
+  /** Título visible: unifica la sección de plan (evita "PLAN DE ACCIÓN" + "PLAN DE ACCIÓN EJECUTIVO"). */
+  function displaySectionTitle(title) {
+    const planIdx = CANONICAL_ORDER.indexOf('PLAN DE ACCIÓN')
+    if (planIdx >= 0 && canonicalIndex(title) === planIdx) return 'Plan de acción'
+    return title
+  }
+
+  function isAdvisorsRecomendadosSection(title) {
+    const idx = CANONICAL_ORDER.indexOf('ADVISORS RECOMENDADOS')
+    return idx >= 0 && canonicalIndex(title) === idx
+  }
+
   /** Parte solo por encabezados de nivel ## (secciones principales); ## preserva subtítulos internos. */
   function parseSections(text) {
     if (!text || !text.trim()) return []
@@ -348,8 +423,12 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
     }))
   }
 
-  function renderMarkdownBody(content) {
-    const trimmed = (content || '').trim()
+  function renderMarkdownBody(content, stripCompanyHeading = null) {
+    let body = content || ''
+    if (stripCompanyHeading?.trim()) {
+      body = stripRedundantCompanyHeadingMarkdown(body, stripCompanyHeading)
+    }
+    const trimmed = body.trim()
     if (!trimmed) return null
     return (
       <div className="plan-markdown">
@@ -365,16 +444,21 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
     const isScorecard = u === 'SCORECARD' || (u.includes('SCORECARD') && !u.includes('DIAGNÓSTICO'))
     const isTimeline = u.includes('HOJA DE RUTA') || u.includes('90 DÍAS')
     const isCarta = u.includes('CARTA DEL CONSEJO')
+    const planIdx = CANONICAL_ORDER.indexOf('PLAN DE ACCIÓN')
+    const stripCompanyHeading =
+      planIdx >= 0 && canonicalIndex(title) === planIdx && session.company?.trim()
+        ? session.company
+        : null
 
     const scorecardEl = isScorecard ? renderScorecard(content) : null
     const timelineEl = isTimeline ? renderTimeline(content) : null
 
     return (
       <div className="plan-section-content">
-        {isScorecard && (scorecardEl || renderMarkdownBody(content))}
-        {isTimeline && (timelineEl || renderMarkdownBody(content))}
-        {isCarta && renderMarkdownBody(content)}
-        {!isScorecard && !isTimeline && !isCarta && renderMarkdownBody(content)}
+        {isScorecard && (scorecardEl || renderMarkdownBody(content, stripCompanyHeading))}
+        {isTimeline && (timelineEl || renderMarkdownBody(content, stripCompanyHeading))}
+        {isCarta && renderMarkdownBody(content, stripCompanyHeading)}
+        {!isScorecard && !isTimeline && !isCarta && renderMarkdownBody(content, stripCompanyHeading)}
       </div>
     )
   }
@@ -454,7 +538,17 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
                 <div className="directory-advisor-nombre">{a.nombre}</div>
                 {(a.empresa || a.email || a.web) && (
                   <div className="directory-advisor-contact">
-                    {[a.empresa, a.email, a.web].filter(Boolean).join(' · ')}
+                    {a.empresa && <span>{a.empresa}</span>}
+                    {a.empresa && (a.email || a.web) && <span> · </span>}
+                    {a.email && (
+                      <a href={`mailto:${a.email}`} className="directory-advisor-link">{a.email}</a>
+                    )}
+                    {a.email && a.web && <span> · </span>}
+                    {a.web && (
+                      <a href={a.web.startsWith('http') ? a.web : `https://${a.web}`} target="_blank" rel="noopener noreferrer" className="directory-advisor-link">
+                        {a.web}
+                      </a>
+                    )}
                   </div>
                 )}
                 {(a.bio || a.productos_servicios) && (
@@ -572,13 +666,14 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
           <span className="pph-sep">·</span>
           <span className="pph-date">{printDate}</span>
         </div>
-        {renderDirectoryAdvisorsPanel({ printClass: 'directory-advisors-printblock' })}
         {sections.map((sec, i) => (
           <div key={i} className={`plan-section ${sec.title.toUpperCase().includes('CARTA') ? 'plan-section-carta' : ''}`}>
             <div className="plan-section-header">
               <span className="plan-section-num">{sec.num}</span>
-              <h3 className="plan-section-title">{sec.title}</h3>
+              <h3 className="plan-section-title">{displaySectionTitle(sec.title)}</h3>
             </div>
+            {isAdvisorsRecomendadosSection(sec.title) &&
+              renderDirectoryAdvisorsPanel({ printClass: 'directory-advisors-printblock' })}
             {renderSectionContent(sec.title, sec.content)}
           </div>
         ))}
@@ -598,7 +693,6 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
         {/* Header */}
         <div className="slide-top">
           <div className="slide-top-left">
-            <div className="screen-badge"><Sparkles size={13} /> PLAN DE ACCIÓN</div>
             <span className="slide-company">{session.company || session.presenter}</span>
           </div>
           <div className="slide-counter">
@@ -606,15 +700,14 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
           </div>
         </div>
 
-        {renderDirectoryAdvisorsPanel()}
-
         {/* Current slide */}
         {currentSection && (
           <div className={`slide-card ${currentSection.title.toUpperCase().includes('CARTA') ? 'plan-section-carta' : ''}`}>
             <div className="plan-section-header">
               <span className="plan-section-num">{currentSection.num}</span>
-              <h3 className="plan-section-title">{currentSection.title}</h3>
+              <h3 className="plan-section-title">{displaySectionTitle(currentSection.title)}</h3>
             </div>
+            {isAdvisorsRecomendadosSection(currentSection.title) && renderDirectoryAdvisorsPanel()}
             {renderSectionContent(currentSection.title, currentSection.content)}
           </div>
         )}
@@ -762,12 +855,6 @@ const synthesisStyles = `
   .sfl-step-done .sfl-step-label { text-decoration: line-through; }
 
   .screen-header { display: flex; flex-direction: column; gap: 10px; }
-  .screen-badge {
-    display: inline-flex; align-self: flex-start; align-items: center; gap: 6px;
-    font-size: 11px; font-weight: 600; letter-spacing: 0.12em;
-    color: var(--gold); border: 1px solid var(--gold);
-    padding: 4px 10px; border-radius: 2px;
-  }
   .screen-title { font-family: var(--font-display); font-size: 32px; font-weight: 700; color: var(--text); }
   .screen-meta { font-size: 13px; color: var(--text-muted); }
 
@@ -793,13 +880,17 @@ const synthesisStyles = `
     font-size: 14px; color: var(--text-muted); font-weight: 500;
   }
 
-  /* Directorio Advisory (siempre visible; no depende del texto que genere el modelo) */
+  /* Directorio Advisory (solo en sección ADVISORS RECOMENDADOS; no depende del markdown del modelo) */
   .directory-advisors {
     background: linear-gradient(135deg, var(--accent-dim) 0%, var(--surface) 100%);
     border: 1px solid var(--accent);
     border-radius: 10px;
     padding: 16px 18px;
     margin-bottom: 4px;
+  }
+  .slide-card .directory-advisors {
+    margin-top: 4px;
+    margin-bottom: 18px;
   }
   .directory-advisors-loading {
     display: flex; align-items: center; gap: 10px;
@@ -852,6 +943,12 @@ const synthesisStyles = `
   }
   .directory-advisor-contact {
     font-size: 12px; color: var(--text-muted); word-break: break-word; margin-bottom: 6px;
+  }
+  .directory-advisor-link {
+    color: var(--accent); text-decoration: none;
+  }
+  .directory-advisor-link:hover {
+    text-decoration: underline;
   }
   .directory-advisor-bio {
     font-size: 12px; color: var(--text-dim); line-height: 1.5;
@@ -1144,8 +1241,9 @@ const synthesisStyles = `
       padding: 50px 60px 40px !important;
     }
 
-    .print-all-sections .directory-advisors {
-      margin-bottom: 28px !important;
+    .print-all-sections .plan-section .directory-advisors {
+      margin-top: 12px !important;
+      margin-bottom: 20px !important;
       page-break-inside: avoid;
       break-inside: avoid;
       border: 1px solid #1565c0 !important;
