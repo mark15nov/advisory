@@ -1,4 +1,4 @@
-// src/App.jsx
+﻿// src/App.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { ChevronLeft, Home, Pause, Play } from 'lucide-react'
 import Dashboard, { saveToHistory } from './components/Dashboard'
@@ -13,7 +13,7 @@ const STORAGE_KEY = 'advisory-session'
 const TIMER_KEY = 'advisory-timer-start'
 const TIMER_PAUSED_KEY = 'advisory-timer-paused'
 const TIMER_ELAPSED_KEY = 'advisory-timer-elapsed'
-const TIMER_DURATION = 60 * 60
+const TIMER_DURATION = 90 * 60
 
 function loadSaved() {
   try {
@@ -334,7 +334,7 @@ export default function App() {
                   border: i === activeIndex ? '2px solid var(--gold-light)' : '2px solid transparent',
                   boxShadow: i === activeIndex ? '0 0 10px rgba(198,40,40,0.3)' : 'none',
                 }}>
-                  {i < activeIndex ? '✓' : i + 1}
+                  {i < activeIndex ? '\u2713' : i + 1}
                 </div>
                 <span style={{
                   ...styles.stepLabel,
@@ -373,7 +373,7 @@ export default function App() {
             <button
               style={styles.resetBtn}
               onClick={() => {
-                if (confirm('¿Iniciar nueva sesión? Se perderá todo el progreso.')) {
+                if (confirm('\u00bfIniciar nueva sesi\u00f3n? Se perder\u00e1 todo el progreso.')) {
                   startNewSession()
                 }
               }}
@@ -510,3 +510,4 @@ const styles = {
   },
   main: { flex: 1, overflowY: 'auto' },
 }
+
