@@ -44,6 +44,11 @@ REGLAS CRÍTICAS DE IDIOMA (OBLIGATORIAS):
 - Usa acentos correctamente: acción, diagnóstico, inversión, implementación, estratégica.
 - Usa vocabulario profesional pero claro.
 
+REGLAS DE REFERENCIA TEMPORAL (OBLIGATORIAS):
+- Usa como referencia el año actual indicado en el prompt del caso.
+- No menciones "2024" ni "2025" a menos que el caso lo diga explícitamente como antecedente histórico.
+- Si hablas de situación presente, usa expresiones como "actualmente", "hoy" o el año de referencia del caso.
+
 REGLAS DE FORMATO:
 - Sé CONCISO. No repitas ideas. Cada oración debe aportar algo nuevo.
 - Usa oraciones cortas y directas.
@@ -69,13 +74,15 @@ REGLAS DE MONEDA Y COSTOS:
 ESTRUCTURA (usa estos encabezados tal cual):
 
 ## SCORECARD
-OBLIGATORIO: Escribe EXACTAMENTE estas 3 líneas, una por cada dimensión. Las 3 son obligatorias. No omitas ninguna. No cambies el formato.
+Calcula una calificación ESPECÍFICA para ESTE caso (1-10) en URGENCIA, COMPLEJIDAD y OPORTUNIDAD.
+No uses valores por defecto ni ternas repetidas por costumbre.
+Cada número debe justificarse con 1 evidencia concreta del caso (impacto, plazo, recursos, riesgo o capacidad de ejecución).
+Si faltan datos, usa un valor intermedio (4-6) y explica la incertidumbre en la justificación.
 
-URGENCIA: 7/10 - [tu explicación aquí de 1 oración]
-COMPLEJIDAD: 5/10 - [tu explicación aquí de 1 oración]
-OPORTUNIDAD: 8/10 - [tu explicación aquí de 1 oración]
-
-Cambia los números (1-10) y las explicaciones según el caso, pero SIEMPRE escribe las 3 líneas con las palabras URGENCIA, COMPLEJIDAD y OPORTUNIDAD.
+FORMATO ESTRICTO (3 líneas obligatorias, sin viñetas y en este orden):
+URGENCIA: [1-10]/10 - [1 oración]
+COMPLEJIDAD: [1-10]/10 - [1 oración]
+OPORTUNIDAD: [1-10]/10 - [1 oración]
 
 ## DIAGNÓSTICO
 Máximo 3-4 oraciones identificando el problema raíz.

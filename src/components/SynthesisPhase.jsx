@@ -160,6 +160,7 @@ export default function SynthesisPhase({ session, questionHistory, experts, onDo
   ])
 
   async function generate(advisoryCandidatesFromClient, isCancelled) {
+    const currentYear = new Date().getFullYear()
     const expertSummary = experts
       .filter(e => e.name && e.opinion)
       .map(e => `**${e.name}${e.role ? ` (${e.role})` : ''}:** ${e.opinion}`)
@@ -183,6 +184,7 @@ export default function SynthesisPhase({ session, questionHistory, experts, onDo
 
     const prompt = `## CASO PRESENTADO
 Presentador: ${session.presenter} | ${companyContext}
+Fecha de referencia: ${currentYear}
 
 Problema: ${session.caseText}
 
@@ -409,14 +411,32 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
       num: sectionNumForTitle(b.title),
     }))
 
+    // Filtra una "Introducción" espuria cuando el modelo deja un encabezado suelto
+    // tipo "PLAN DE ACCIÓN EJECUTIVO — <empresa>" fuera de secciones canónicas.
+    const cleaned = mapped.filter((s) => {
+      if (normalizeTitle(s.title) !== 'INTRODUCCION') return true
+      const content = (s.content || '').trim()
+      if (!content) return false
+
+      const lines = content
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+
+      if (lines.length !== 1) return true
+      const onlyLine = normalizeTitle(lines[0])
+      if (/^PLAN DE ACCION EJECUTIVO(\s*[-:]\s*.+)?$/.test(onlyLine)) return false
+      return true
+    })
+
     // Solo ordenar cuando el streaming terminó; durante streaming el sort
     // causaría parpadeo por reordenamientos continuos con key={sec.title}.
     if (done) {
-      mapped.sort((a, b) => canonicalIndex(a.title) - canonicalIndex(b.title))
+      cleaned.sort((a, b) => canonicalIndex(a.title) - canonicalIndex(b.title))
     }
 
     // Asignar número de sección según posición final
-    return mapped.map((s, i) => ({
+    return cleaned.map((s, i) => ({
       ...s,
       num: s.num ?? String(i + 1).padStart(2, '0'),
       index: i,
@@ -464,6 +484,16 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
   }
 
   const sections = output ? parseSections(output) : []
+  const printSections = (() => {
+    const ordered = [...sections]
+    const cartaIndex = ordered.findIndex((s) =>
+      normalizeTitle(s.title).includes('CARTA DEL CONSEJO')
+    )
+    if (cartaIndex === -1) return ordered
+    const [carta] = ordered.splice(cartaIndex, 1)
+    ordered.push(carta)
+    return ordered
+  })()
   const totalSlides = sections.length
   const currentSection = sections[currentSlide]
 
@@ -666,7 +696,7 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
           <span className="pph-sep">·</span>
           <span className="pph-date">{printDate}</span>
         </div>
-        {sections.map((sec, i) => (
+        {printSections.map((sec, i) => (
           <div key={i} className={`plan-section ${sec.title.toUpperCase().includes('CARTA') ? 'plan-section-carta' : ''}`}>
             <div className="plan-section-header">
               <span className="plan-section-num">{sec.num}</span>
@@ -1330,8 +1360,8 @@ const synthesisStyles = `
       padding: 0 0 22px 0 !important;
       margin-bottom: 22px;
       border-bottom: 1px solid #e0e0e0 !important;
-      page-break-inside: avoid;
-      break-inside: avoid;
+      page-break-inside: auto;
+      break-inside: auto;
     }
     .plan-section:last-child {
       border-bottom: none !important;
@@ -1367,6 +1397,8 @@ const synthesisStyles = `
       color: #333 !important; font-size: 11.5pt !important; line-height: 1.6 !important;
       overflow: visible !important; white-space: normal !important;
       word-wrap: break-word !important; overflow-wrap: break-word !important;
+      word-break: break-word !important;
+      hyphens: auto !important;
       orphans: 3;
       widows: 3;
     }
@@ -1381,6 +1413,8 @@ const synthesisStyles = `
       color: #333 !important; font-size: 11.5pt !important;
       overflow: visible !important; white-space: normal !important;
       word-wrap: break-word !important; overflow-wrap: break-word !important;
+      word-break: break-word !important;
+      hyphens: auto !important;
     }
 
     .plan-num {
@@ -1393,6 +1427,8 @@ const synthesisStyles = `
       color: #333 !important; font-size: 11.5pt !important; line-height: 1.6 !important;
       overflow: visible !important; white-space: normal !important;
       word-wrap: break-word !important; overflow-wrap: break-word !important;
+      word-break: break-word !important;
+      hyphens: auto !important;
       page-break-inside: avoid;
       break-inside: avoid;
     }
@@ -1470,6 +1506,8 @@ const synthesisStyles = `
       background: #fdf2f2 !important;
       border: 1px solid var(--red) !important;
       border-left: 4px solid var(--red) !important;
+      page-break-before: always !important;
+      break-before: page !important;
     }
     .carta-text {
       color: #333 !important; font-size: 12px !important;
@@ -1481,6 +1519,9 @@ const synthesisStyles = `
     .plan-markdown-li {
       color: #333 !important; font-size: 11.5pt !important;
       line-height: 1.6 !important;
+      overflow-wrap: anywhere !important;
+      word-break: break-word !important;
+      hyphens: auto !important;
       orphans: 3;
       widows: 3;
     }
