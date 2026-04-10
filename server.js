@@ -187,11 +187,22 @@ async function callAnthropic({ system, advisoryContext, messages, stream, maxTok
 }
 
 app.post('/api/chat', async (req, res) => {
-  const { system, messages, stream, advisoryProfile, advisoryCandidatesFromClient } = req.body
-  const advisoryCandidates = Array.isArray(advisoryCandidatesFromClient)
-    ? normalizeClientAdvisoryCandidates(advisoryCandidatesFromClient)
-    : await fetchAdvisoryCandidates(advisoryProfile)
-  const advisoryContext = buildAdvisoryContext(advisoryCandidates)
+  const {
+    system,
+    messages,
+    stream,
+    advisoryProfile,
+    advisoryCandidatesFromClient,
+    skipAdvisoryContext,
+  } = req.body
+
+  let advisoryContext = ''
+  if (!skipAdvisoryContext) {
+    const advisoryCandidates = Array.isArray(advisoryCandidatesFromClient)
+      ? normalizeClientAdvisoryCandidates(advisoryCandidatesFromClient)
+      : await fetchAdvisoryCandidates(advisoryProfile)
+    advisoryContext = buildAdvisoryContext(advisoryCandidates)
+  }
 
   try {
     const response = await callAnthropic({

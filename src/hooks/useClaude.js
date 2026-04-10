@@ -5,6 +5,7 @@ export async function callClaude({
   onChunk,
   advisoryProfile,
   advisoryCandidatesFromClient,
+  skipAdvisoryContext,
 }) {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 120000)
@@ -24,6 +25,7 @@ export async function callClaude({
         ...(Array.isArray(advisoryCandidatesFromClient)
           ? { advisoryCandidatesFromClient }
           : {}),
+        ...(skipAdvisoryContext ? { skipAdvisoryContext: true } : {}),
       }),
       signal: controller.signal,
     })
