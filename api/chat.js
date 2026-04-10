@@ -5,6 +5,146 @@ import {
   normalizeClientAdvisoryCandidates,
 } from '../src/lib/advisoryPick.js'
 
+const SCORECARD_SUSPICIOUS_TRIPLES = new Set([
+  '9-6-9',
+  '7-5-8',
+])
+
+function parseScorecard(text = '') {
+  const lines = String(text).replace(/\r\n/g, '\n').split('\n')
+  const out = {}
+  for (const line of lines) {
+    const cleaned = line.replace(/\*\*/g, '').trim()
+    const m = cleaned.match(/^(URGENCIA|COMPLEJIDAD|OPORTUNIDAD):\s*([1-9]|10)\/10\s*-\s*(.+)$/i)
+    if (m) {
+      out[m[1].toUpperCase()] = { score: Number(m[2]), reason: m[3].trim() }
+    }
+  }
+  return out
+}
+
+function hasValidScorecard(text = '') {
+  const sc = parseScorecard(text)
+  return Boolean(sc.URGENCIA && sc.COMPLEJIDAD && sc.OPORTUNIDAD)
+}
+
+function isSuspiciousScorecard(text = '') {
+  const sc = parseScorecard(text)
+  if (!(sc.URGENCIA && sc.COMPLEJIDAD && sc.OPORTUNIDAD)) return false
+  const key = `${sc.URGENCIA.score}-${sc.COMPLEJIDAD.score}-${sc.OPORTUNIDAD.score}`
+  return SCORECARD_SUSPICIOUS_TRIPLES.has(key)
+}
+
+function replaceScorecardSection(report = '', scorecardLines = '') {
+  const normalized = String(report).replace(/\r\n/g, '\n')
+  const replacement = `## SCORECARD\n${scorecardLines.trim()}`
+  const sectionRegex = /##\s*SCORECARD[\s\S]*?(?=\n##\s+[^\n]+|$)/i
+  if (sectionRegex.test(normalized)) return normalized.replace(sectionRegex, replacement)
+  return `${replacement}\n\n${normalized}`.trim()
+}
+
+async function collectAnthropicStreamText(response) {
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let fullText = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    const events = buffer.split('\n\n')
+    buffer = events.pop() || ''
+
+    for (const event of events) {
+      const lines = event.split('\n')
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const data = line.slice(6)
+        try {
+          const parsed = JSON.parse(data)
+          const text = parsed?.delta?.text || ''
+          if (text) fullText += text
+        } catch {}
+      }
+    }
+  }
+
+  if (buffer.trim()) {
+    const lines = buffer.split('\n')
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const data = line.slice(6)
+      try {
+        const parsed = JSON.parse(data)
+        const text = parsed?.delta?.text || ''
+        if (text) fullText += text
+      } catch {}
+    }
+  }
+
+  return fullText
+}
+
+async function anthropicText({ apiKey, model, systemPrompt, messages, maxTokens = 900, temperature = 0.2 }) {
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model,
+      system: systemPrompt,
+      messages,
+      max_tokens: maxTokens,
+      temperature,
+      stream: false,
+    }),
+  })
+  if (!r.ok) return ''
+  const data = await r.json()
+  return (data.content || [])
+    .filter((b) => b?.type === 'text')
+    .map((b) => b.text || '')
+    .join('')
+}
+
+async function ensureScorecardQuality({ text, enabled, apiKey, model, systemPrompt, anthropicMessages }) {
+  if (!enabled) return text
+
+  const invalid = !hasValidScorecard(text)
+  const suspicious = isSuspiciousScorecard(text)
+  if (!invalid && !suspicious) return text
+
+  const scorecardOnly = await anthropicText({
+    apiKey,
+    model,
+    systemPrompt,
+    messages: [{
+      role: 'user',
+      content: `Corrige SOLO la sección SCORECARD del siguiente informe.
+
+Devuelve exactamente 3 líneas en este orden y formato:
+URGENCIA: [1-10]/10 - [1 oración]
+COMPLEJIDAD: [1-10]/10 - [1 oración]
+OPORTUNIDAD: [1-10]/10 - [1 oración]
+
+No incluyas encabezados, viñetas, explicación adicional ni texto extra.
+
+INFORME:
+${text}`,
+    }],
+    maxTokens: 300,
+    temperature: 0.1,
+  })
+
+  if (!hasValidScorecard(scorecardOnly)) return text
+  return replaceScorecardSection(text, scorecardOnly)
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: { message: 'Method not allowed' } })
@@ -81,6 +221,7 @@ export default async function handler(req, res) {
     }
 
     let response
+    let selectedModel = ''
     modelLoop: for (const model of modelsToTry) {
       for (let attempt = 1; attempt <= 3; attempt++) {
         response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -116,6 +257,7 @@ export default async function handler(req, res) {
             error: { message: errMsg || rawError || 'Error de Anthropic' },
           })
         }
+        selectedModel = model
         break modelLoop
       }
       response = undefined
@@ -137,60 +279,25 @@ export default async function handler(req, res) {
       })
     }
 
+    const scorecardValidationEnabled = /##\s*SCORECARD/i.test(systemPrompt)
+
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream')
       res.setHeader('Cache-Control', 'no-cache')
       res.setHeader('Connection', 'keep-alive')
 
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
+      const streamedText = await collectAnthropicStreamText(response)
+      const finalText = await ensureScorecardQuality({
+        text: streamedText,
+        enabled: scorecardValidationEnabled,
+        apiKey: ANTHROPIC_API_KEY,
+        model: selectedModel || modelsToTry[0],
+        systemPrompt,
+        anthropicMessages,
+      })
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-
-        const events = buffer.split('\n\n')
-        buffer = events.pop() || ''
-
-        for (const event of events) {
-          const lines = event.split('\n')
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue
-            const data = line.slice(6)
-            try {
-              const parsed = JSON.parse(data)
-              if (parsed.type === 'message_stop') {
-                res.write('data: [DONE]\n\n')
-                continue
-              }
-              const text = parsed?.delta?.text || ''
-              if (text) {
-                res.write(`data: ${JSON.stringify({ text })}\n\n`)
-              }
-            } catch {}
-          }
-        }
-      }
-      if (buffer.trim()) {
-        const lines = buffer.split('\n')
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const data = line.slice(6)
-          try {
-            const parsed = JSON.parse(data)
-            if (parsed.type === 'message_stop') {
-              res.write('data: [DONE]\n\n')
-              continue
-            }
-            const text = parsed?.delta?.text || ''
-            if (text) {
-              res.write(`data: ${JSON.stringify({ text })}\n\n`)
-            }
-          } catch {}
-        }
-      }
+      if (finalText) res.write(`data: ${JSON.stringify({ text: finalText })}\n\n`)
+      res.write('data: [DONE]\n\n')
       res.end()
     } else {
       const data = await response.json()
@@ -198,7 +305,15 @@ export default async function handler(req, res) {
         .filter((b) => b?.type === 'text')
         .map((b) => b.text || '')
         .join('')
-      res.json({ text })
+      const finalText = await ensureScorecardQuality({
+        text,
+        enabled: scorecardValidationEnabled,
+        apiKey: ANTHROPIC_API_KEY,
+        model: selectedModel || modelsToTry[0],
+        systemPrompt,
+        anthropicMessages,
+      })
+      res.json({ text: finalText })
     }
   } catch (err) {
     console.error('Proxy error:', err)
