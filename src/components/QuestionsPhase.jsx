@@ -84,6 +84,7 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
       await callClaude({
         system: SYSTEM_PROMPTS.questionGuide,
         messages,
+        skipAdvisoryContext: true,
         onChunk: (chunk) => {
           streamed += chunk
           setStreamingQuestion(streamed)
