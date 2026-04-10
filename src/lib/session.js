@@ -112,7 +112,8 @@ Estima el impacto económico y de negocio si se ejecuta el plan completo. TODOS 
 - Impacto en posicionamiento: cómo cambia su posición competitiva
 Sé realista pero optimista. Basa las estimaciones en los datos del caso y en precios reales del mercado mexicano.
 
-## MÉTRICAS DE ÉXITO
+## MÉTRICAS DE ÉXITO (KPI´S)
+Usa EXACTAMENTE este encabezado de sección: "## MÉTRICAS DE ÉXITO (KPI´S)" — sin variantes ni sufijos adicionales al título.
 Basándote en el plan de acción que acabas de generar (que ya integra consejeros + IA), define 3-4 KPIs concretos que midan el avance de esas acciones específicas. En bullet points.
 
 ## RIESGOS Y MITIGACIONES

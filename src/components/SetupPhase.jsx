@@ -1,4 +1,4 @@
-// src/components/SetupPhase.jsx
+﻿// src/components/SetupPhase.jsx
 import React, { useState } from 'react'
 import { ArrowRight, Building2, User, MapPin, Users, DollarSign, Calendar, Briefcase, Target, Star, Play, Clock } from 'lucide-react'
 
@@ -15,7 +15,13 @@ export default function SetupPhase({ onStart, initialData, timerRunning, onStart
   const [differentiation, setDifferentiation] = useState(initialData?.differentiation || '')
   const [caseText, setCaseText] = useState(initialData?.caseText || '')
 
-  const canStart = presenter.trim() && company.trim() && industry.trim() && whatYouDo.trim() && caseText.trim().length > 30
+  const canStart =
+    presenter.trim() &&
+    company.trim() &&
+    industry.trim() &&
+    whatYouDo.trim() &&
+    differentiation.trim().length >= 100 &&
+    caseText.trim().length >= 200
 
   return (
     <div style={styles.container}>
@@ -31,7 +37,7 @@ export default function SetupPhase({ onStart, initialData, timerRunning, onStart
       {!timerRunning ? (
         <button style={styles.timerBtn} onClick={onStartTimer}>
           <Play size={16} />
-          Iniciar sesión (60 min)
+          Iniciar sesión (90 min)
         </button>
       ) : (
         <div style={styles.timerActive}>
@@ -183,7 +189,7 @@ export default function SetupPhase({ onStart, initialData, timerRunning, onStart
         <div style={styles.field}>
           <label style={styles.label}>
             <Star size={14} style={{ marginRight: 6 }} />
-            ¿Qué te diferencia de los demás?
+            ¿Qué te diferencia de los demás? *
           </label>
           <textarea
             style={styles.textarea}
@@ -192,6 +198,12 @@ export default function SetupPhase({ onStart, initialData, timerRunning, onStart
             onChange={e => setDifferentiation(e.target.value)}
             rows={3}
           />
+          <span style={styles.counter}>{differentiation.length}/100 mínimo</span>
+          {differentiation.trim().length > 0 && differentiation.trim().length < 100 && (
+            <span style={{ ...styles.counter, color: '#b45309' }}>
+              Faltan {100 - differentiation.trim().length} caracteres para el mínimo.
+            </span>
+          )}
         </div>
 
         {/* Sección: Problema */}
@@ -205,7 +217,12 @@ export default function SetupPhase({ onStart, initialData, timerRunning, onStart
             onChange={e => setCaseText(e.target.value)}
             rows={7}
           />
-          <span style={styles.counter}>{caseText.length} caracteres</span>
+          <span style={styles.counter}>{caseText.length} caracteres (mínimo 200)</span>
+          {caseText.trim().length > 0 && caseText.trim().length < 200 && (
+            <span style={{ ...styles.counter, color: '#b45309' }}>
+              Faltan {200 - caseText.trim().length} caracteres para el mínimo.
+            </span>
+          )}
         </div>
 
         <button

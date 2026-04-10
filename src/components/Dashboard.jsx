@@ -280,6 +280,9 @@ const styles = {
     color: 'var(--text-dim)',
     lineHeight: 1.5,
     flex: 1,
+    whiteSpace: 'pre-wrap',
+    overflowWrap: 'anywhere',
+    wordBreak: 'break-word',
   },
   cardFooter: {
     display: 'flex',

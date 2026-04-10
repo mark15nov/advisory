@@ -1,10 +1,11 @@
 // src/components/QuestionsPhase.jsx
 import React, { useState, useEffect, useRef } from 'react'
-import { ArrowRight, Loader2, MessageSquare, Pencil } from 'lucide-react'
+import { ArrowRight, Loader2, MessageSquare, Pencil, Mic, MicOff, Plus } from 'lucide-react'
 import { callClaude } from '../hooks/useClaude'
 import { SYSTEM_PROMPTS } from '../lib/session'
 
-const TOTAL_QUESTIONS = 5
+/** Preguntas guía generadas por la IA antes de permitir extras o continuar. */
+const MIN_AI_QUESTIONS = 5
 
 /** Quita restos que a veces añade el modelo (sección de advisors del plan ejecutivo). */
 function stripDiagnosticQuestionNoise(text) {
@@ -17,7 +18,7 @@ function stripDiagnosticQuestionNoise(text) {
 
 export default function QuestionsPhase({ session, onComplete, initialHistory }) {
   const hasInitial = initialHistory && initialHistory.length > 0
-  // qa: array of { question, answer } pairs
+  // qa: array of { question, answer, source?: 'ai' | 'user' }
   const [qa, setQa] = useState(hasInitial ? initialHistory : [])
   const [answer, setAnswer] = useState('')
   const [loading, setLoading] = useState(false)
@@ -25,13 +26,20 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
   const [error, setError] = useState(null)
   const [editingIndex, setEditingIndex] = useState(null)
   const [editText, setEditText] = useState('')
+  const [speechSupported, setSpeechSupported] = useState(false)
+  const [isListening, setIsListening] = useState(false)
+  const [speechError, setSpeechError] = useState(null)
+  const [showOwnQuestionForm, setShowOwnQuestionForm] = useState(false)
+  const [ownQuestionText, setOwnQuestionText] = useState('')
   const lastFailedQaRef = useRef(null)
   const bottomRef = useRef(null)
+  const recognitionRef = useRef(null)
 
   const questionCount = qa.length
   const currentQa = qa[qa.length - 1]
   const waitingForAnswer = currentQa && !currentQa.answer && !loading
-  const allAnswered = qa.length >= TOTAL_QUESTIONS && qa.every(item => item.answer)
+  const allAnswered =
+    qa.length >= MIN_AI_QUESTIONS && qa.length > 0 && qa.every(item => item.answer)
 
   useEffect(() => {
     if (!hasInitial) fetchQuestion([])
@@ -40,6 +48,68 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [qa, streamingQuestion])
+
+  useEffect(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) {
+      setSpeechSupported(false)
+      return
+    }
+
+    setSpeechSupported(true)
+    const recognition = new SR()
+    recognition.lang = 'es-MX'
+    recognition.continuous = true
+    recognition.interimResults = true
+
+    recognition.onstart = () => {
+      setIsListening(true)
+      setSpeechError(null)
+    }
+
+    recognition.onend = () => {
+      setIsListening(false)
+    }
+
+    recognition.onerror = (event) => {
+      if (event?.error === 'not-allowed' || event?.error === 'service-not-allowed') {
+        setSpeechError('No se concedió permiso para usar el micrófono.')
+      } else {
+        setSpeechError('No fue posible transcribir la voz. Intenta nuevamente.')
+      }
+      setIsListening(false)
+    }
+
+    recognition.onresult = (event) => {
+      let finalText = ''
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i]
+        if (result.isFinal) finalText += `${result[0].transcript} `
+      }
+      const normalized = finalText.trim()
+      if (!normalized) return
+      setAnswer((prev) => {
+        const base = prev.trimEnd()
+        return base ? `${base} ${normalized}` : normalized
+      })
+    }
+
+    recognitionRef.current = recognition
+    return () => {
+      recognition.onstart = null
+      recognition.onend = null
+      recognition.onerror = null
+      recognition.onresult = null
+      recognition.stop()
+      recognitionRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!waitingForAnswer && isListening) {
+      recognitionRef.current?.stop()
+    }
+  }, [waitingForAnswer, isListening])
 
   function buildCompanyContext() {
     return [
@@ -85,7 +155,7 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
       if (currentQa.length > 0) {
         messages.push({
           role: 'user',
-          content: `Pregunta ${questionNumber} de ${TOTAL_QUESTIONS}. Haz la siguiente pregunta estratégica basándote en mis respuestas anteriores.`,
+          content: `Pregunta ${questionNumber} de ${MIN_AI_QUESTIONS}. Haz la siguiente pregunta estratégica basándote en mis respuestas anteriores.`,
         })
       }
 
@@ -101,7 +171,7 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
       })
 
       const cleaned = stripDiagnosticQuestionNoise(streamed)
-      const newQa = [...currentQa, { question: cleaned, answer: null }]
+      const newQa = [...currentQa, { question: cleaned, answer: null, source: 'ai' }]
       setQa(newQa)
       setStreamingQuestion('')
       setError(null)
@@ -115,6 +185,7 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
 
   async function handleAnswer() {
     if (!answer.trim()) return
+    if (isListening) recognitionRef.current?.stop()
     const text = answer.trim()
     setAnswer('')
 
@@ -124,14 +195,43 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
     )
     setQa(updatedQa)
 
-    // If we've completed all questions, move to next phase
-    if (updatedQa.length >= TOTAL_QUESTIONS) {
-      onComplete(updatedQa)
+    if (updatedQa.length < MIN_AI_QUESTIONS) {
+      await fetchQuestion(updatedQa)
+    }
+  }
+
+  function cancelOwnQuestionForm() {
+    setShowOwnQuestionForm(false)
+    setOwnQuestionText('')
+  }
+
+  function submitOwnQuestion() {
+    const text = ownQuestionText.trim()
+    if (!text) return
+    setQa((prev) => [...prev, { question: text, answer: null, source: 'user' }])
+    cancelOwnQuestionForm()
+  }
+
+  function questionRoleLabel(item, index) {
+    if (item.source === 'user') {
+      const n = index - MIN_AI_QUESTIONS + 1
+      return `PRESENTADOR — PREGUNTA ADICIONAL ${n}`
+    }
+    return `CONSEJO IA — PREGUNTA ${index + 1}`
+  }
+
+  function toggleVoiceInput() {
+    if (!speechSupported || !recognitionRef.current) return
+    setSpeechError(null)
+    if (isListening) {
+      recognitionRef.current.stop()
       return
     }
-
-    // Otherwise, fetch next question
-    await fetchQuestion(updatedQa)
+    try {
+      recognitionRef.current.start()
+    } catch {
+      setSpeechError('No fue posible iniciar el micrófono. Verifica permisos del navegador.')
+    }
   }
 
   function startEditing(index) {
@@ -165,14 +265,23 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
         <div style={styles.progress}>
           <div style={styles.progressLabel}>Preguntas de diagnóstico</div>
           <div style={styles.dots}>
-            {[...Array(TOTAL_QUESTIONS)].map((_, i) => (
+            {[...Array(MIN_AI_QUESTIONS)].map((_, i) => (
               <div key={i} style={{
                 ...styles.dot,
                 background: i < questionCount ? 'var(--gold)' : 'var(--border)',
               }} />
             ))}
           </div>
-          <div style={styles.progressCount}>{questionCount} / {TOTAL_QUESTIONS}</div>
+          <div style={styles.progressCount}>
+            {Math.min(questionCount, MIN_AI_QUESTIONS)} / {MIN_AI_QUESTIONS}
+            {questionCount > MIN_AI_QUESTIONS && (
+              <span style={styles.progressExtra}>
+                {' '}
+                · +{questionCount - MIN_AI_QUESTIONS} propia
+                {questionCount - MIN_AI_QUESTIONS !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -189,8 +298,13 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
       <div style={styles.qaList}>
         {qa.map((item, i) => (
           <div key={i} style={styles.qaBlock}>
-            <div style={styles.questionBubble}>
-              <span style={styles.roleTag}>CONSEJO IA — PREGUNTA {i + 1}</span>
+            <div
+              style={{
+                ...styles.questionBubble,
+                ...(item.source === 'user' ? styles.questionBubbleUser : null),
+              }}
+            >
+              <span style={styles.roleTag}>{questionRoleLabel(item, i)}</span>
               <p style={styles.questionText}>{stripDiagnosticQuestionNoise(item.question)}</p>
             </div>
             {item.answer && editingIndex === i ? (
@@ -242,7 +356,7 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
         {streamingQuestion && (
           <div style={styles.qaBlock}>
             <div style={{ ...styles.questionBubble, borderColor: 'var(--gold)', opacity: 0.85 }}>
-              <span style={styles.roleTag}>CONSEJO IA — PREGUNTA {questionCount + 1}</span>
+              <span style={styles.roleTag}>CONSEJO IA — PREGUNTA {Math.min(questionCount + 1, MIN_AI_QUESTIONS)}</span>
               <p style={styles.questionText}>{stripDiagnosticQuestionNoise(streamingQuestion)}<span style={styles.cursor}>|</span></p>
             </div>
           </div>
@@ -288,7 +402,25 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
             autoFocus
           />
           <div style={styles.inputActions}>
-            <span style={styles.hint}>⌘ + Enter para enviar</span>
+            <div style={styles.inputActionsLeft}>
+              <span style={styles.hint}>⌘ + Enter para enviar</span>
+              <button
+                type="button"
+                style={{
+                  ...styles.micBtn,
+                  ...(isListening ? styles.micBtnActive : null),
+                  ...(!speechSupported ? styles.micBtnDisabled : null),
+                }}
+                onClick={toggleVoiceInput}
+                disabled={!speechSupported}
+                title={speechSupported ? 'Dictar respuesta con voz' : 'Tu navegador no soporta reconocimiento de voz'}
+              >
+                {isListening ? <MicOff size={14} /> : <Mic size={14} />}
+                {speechSupported
+                  ? (isListening ? 'Detener micrófono' : 'Responder con voz')
+                  : 'Voz no disponible'}
+              </button>
+            </div>
             <button
               style={{ ...styles.btn, opacity: answer.trim() ? 1 : 0.4 }}
               onClick={handleAnswer}
@@ -297,16 +429,56 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
               Enviar respuesta <ArrowRight size={15} />
             </button>
           </div>
+          {speechError && <span style={styles.speechError}>{speechError}</span>}
         </div>
       )}
 
-      {/* Continue button when all questions are answered (returning from a later step) */}
+      {/* Tras el núcleo de la IA (y cualquier extra respondida): añadir pregunta propia o continuar */}
       {allAnswered && !loading && (
         <div style={styles.inputArea}>
-          <button
-            style={styles.btn}
-            onClick={() => onComplete(qa)}
-          >
+          {showOwnQuestionForm ? (
+            <div style={styles.ownQuestionBox}>
+              <label style={styles.ownQuestionLabel} htmlFor="own-diagnostic-q">
+                Tu pregunta para el presentador
+              </label>
+              <textarea
+                id="own-diagnostic-q"
+                style={styles.textarea}
+                placeholder="Formula la pregunta que quieres incorporar al diagnóstico…"
+                value={ownQuestionText}
+                onChange={(e) => setOwnQuestionText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitOwnQuestion()
+                  if (e.key === 'Escape') cancelOwnQuestionForm()
+                }}
+                rows={3}
+                autoFocus
+              />
+              <div style={styles.ownQuestionActions}>
+                <button type="button" style={styles.btnSecondary} onClick={cancelOwnQuestionForm}>
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  style={{ ...styles.btn, opacity: ownQuestionText.trim() ? 1 : 0.4 }}
+                  onClick={submitOwnQuestion}
+                  disabled={!ownQuestionText.trim()}
+                >
+                  Añadir pregunta <Plus size={15} />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              style={styles.btnSecondary}
+              onClick={() => setShowOwnQuestionForm(true)}
+            >
+              <Plus size={15} />
+              Agregar pregunta propia
+            </button>
+          )}
+          <button type="button" style={styles.btn} onClick={() => onComplete(qa)}>
             Continuar al consejo <ArrowRight size={15} />
           </button>
         </div>
@@ -347,6 +519,7 @@ const styles = {
   progress: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 },
   progressLabel: { fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.08em', textTransform: 'uppercase' },
   progressCount: { fontSize: 11, color: 'var(--text-dim)' },
+  progressExtra: { color: 'var(--text-muted)' },
   dots: { display: 'flex', gap: 5 },
   dot: { width: 8, height: 8, borderRadius: '50%', transition: 'background 0.3s' },
   caseSummary: {
@@ -362,7 +535,14 @@ const styles = {
     fontSize: 10, fontWeight: 600, letterSpacing: '0.12em',
     color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8,
   },
-  caseText: { fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 },
+  caseText: {
+    fontSize: 13,
+    color: 'var(--text-muted)',
+    lineHeight: 1.6,
+    whiteSpace: 'pre-wrap',
+    overflowWrap: 'anywhere',
+    wordBreak: 'break-word',
+  },
   qaList: {
     flex: 1,
     overflowY: 'auto',
@@ -381,11 +561,22 @@ const styles = {
     flexDirection: 'column',
     gap: 8,
   },
+  questionBubbleUser: {
+    background: 'var(--surface-2)',
+    border: '1px solid var(--border)',
+  },
   roleTag: {
     fontSize: 10, fontWeight: 600, letterSpacing: '0.12em',
     color: 'var(--gold)', textTransform: 'uppercase',
   },
-  questionText: { fontSize: 15, color: 'var(--text)', lineHeight: 1.6 },
+  questionText: {
+    fontSize: 15,
+    color: 'var(--text)',
+    lineHeight: 1.6,
+    whiteSpace: 'pre-wrap',
+    overflowWrap: 'anywhere',
+    wordBreak: 'break-word',
+  },
   answerBubble: {
     background: 'var(--surface-2)',
     border: '1px solid var(--border)',
@@ -409,7 +600,14 @@ const styles = {
     display: 'flex', alignItems: 'center', gap: 4,
     fontSize: 11, color: 'var(--gold)', cursor: 'pointer',
   },
-  answerText: { fontSize: 14, color: 'var(--text)', lineHeight: 1.6 },
+  answerText: {
+    fontSize: 14,
+    color: 'var(--text)',
+    lineHeight: 1.6,
+    whiteSpace: 'pre-wrap',
+    overflowWrap: 'anywhere',
+    wordBreak: 'break-word',
+  },
   editTextarea: {
     background: 'var(--surface)',
     border: '1px solid var(--border)',
@@ -479,13 +677,75 @@ const styles = {
   inputActions: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
   },
+  inputActionsLeft: {
+    display: 'flex', alignItems: 'center', gap: 10,
+  },
   hint: { fontSize: 12, color: 'var(--text-dim)' },
+  micBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    background: 'transparent',
+    border: '1px solid var(--border)',
+    borderRadius: 6,
+    padding: '8px 10px',
+    fontSize: 12,
+    color: 'var(--text-muted)',
+    cursor: 'pointer',
+  },
+  micBtnActive: {
+    border: '1px solid var(--gold)',
+    color: 'var(--gold)',
+    background: 'var(--gold-dim)',
+  },
+  micBtnDisabled: {
+    opacity: 0.6,
+    cursor: 'not-allowed',
+  },
+  speechError: {
+    fontSize: 12,
+    color: 'var(--red, #dc3c3c)',
+  },
   btn: {
     display: 'flex', alignItems: 'center', gap: 8,
     background: 'var(--gold)', color: '#fff',
     border: 'none', borderRadius: 6,
     padding: '10px 20px', fontSize: 13, fontWeight: 600,
     cursor: 'pointer', transition: 'opacity 0.2s',
+    justifyContent: 'center',
+  },
+  btnSecondary: {
+    display: 'flex', alignItems: 'center', gap: 8,
+    justifyContent: 'center',
+    background: 'transparent',
+    color: 'var(--text)',
+    border: '1px solid var(--border)',
+    borderRadius: 6,
+    padding: '10px 20px',
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'border-color 0.2s, color 0.2s',
+  },
+  ownQuestionBox: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    marginBottom: 4,
+  },
+  ownQuestionLabel: {
+    fontSize: 11,
+    fontWeight: 600,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+    color: 'var(--text-muted)',
+  },
+  ownQuestionActions: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+    flexWrap: 'wrap',
   },
   errorBanner: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',

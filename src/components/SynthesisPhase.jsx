@@ -227,7 +227,7 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
     'TABLA COMPARATIVA',
     'PLAN DE ACCIÓN',
     'PROYECCIÓN DE IMPACTO',
-    'MÉTRICAS DE ÉXITO',
+    'MÉTRICAS DE ÉXITO (KPI´S)',
     'RIESGOS Y MITIGACIONES',
     'HOJA DE RUTA',
     'ADVISORS RECOMENDADOS',
@@ -240,6 +240,7 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
     'TABLA COMPARATIVA': '03',
     'PLAN DE ACCIÓN': '04',
     'PROYECCIÓN DE IMPACTO': '05',
+    'MÉTRICAS DE ÉXITO (KPI´S)': '06',
     'MÉTRICAS DE ÉXITO': '06',
     'RIESGOS Y MITIGACIONES': '07',
     'HOJA DE RUTA': '08',
@@ -360,6 +361,8 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
         if (rest.length <= 16 && !/^\d/.test(rest)) return i
       }
     }
+    const metricsIdx = CANONICAL_ORDER.indexOf('MÉTRICAS DE ÉXITO (KPI´S)')
+    if (metricsIdx >= 0 && u === normalizeTitle('MÉTRICAS DE ÉXITO')) return metricsIdx
     return CANONICAL_ORDER.length
   }
 
@@ -367,6 +370,8 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
   function displaySectionTitle(title) {
     const planIdx = CANONICAL_ORDER.indexOf('PLAN DE ACCIÓN')
     if (planIdx >= 0 && canonicalIndex(title) === planIdx) return 'Plan de acción'
+    const metricsIdx = CANONICAL_ORDER.indexOf('MÉTRICAS DE ÉXITO (KPI´S)')
+    if (metricsIdx >= 0 && canonicalIndex(title) === metricsIdx) return 'Métricas de éxito (KPI´S)'
     return title
   }
 
@@ -601,7 +606,9 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
   if (!done) {
     const completedSections = sections.length
     const totalExpected = CANONICAL_ORDER.length
-    const progress = Math.min(Math.round((completedSections / totalExpected) * 100), 95)
+    const sectionProgress = Math.round((completedSections / totalExpected) * 100)
+    const textProgress = Math.min(Math.round((output.length / 1200) * 30), 30)
+    const progress = Math.min(Math.max(sectionProgress, textProgress), 95)
 
     const loadingMessages = [
       'Analizando el caso y las respuestas del diagnóstico…',
@@ -609,7 +616,7 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
       'Construyendo tabla comparativa Consejo vs IA…',
       'Redactando plan de acción ejecutivo…',
       'Calculando proyección de impacto…',
-      'Definiendo métricas de éxito…',
+      'Definiendo métricas de éxito (KPI´S)…',
       'Identificando riesgos y mitigaciones…',
       'Armando hoja de ruta de 90 días…',
       'Seleccionando advisors recomendados…',

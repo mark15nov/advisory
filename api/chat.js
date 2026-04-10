@@ -87,6 +87,58 @@ async function collectAnthropicStreamText(response) {
   return fullText
 }
 
+async function relayAnthropicStreamToClient(response, onTextChunk) {
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let fullText = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    const events = buffer.split('\n\n')
+    buffer = events.pop() || ''
+
+    for (const event of events) {
+      const lines = event.split('\n')
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const data = line.slice(6)
+        if (data === '[DONE]') continue
+        try {
+          const parsed = JSON.parse(data)
+          const text = parsed?.delta?.text || ''
+          if (text) {
+            fullText += text
+            onTextChunk(text)
+          }
+        } catch {}
+      }
+    }
+  }
+
+  if (buffer.trim()) {
+    const lines = buffer.split('\n')
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const data = line.slice(6)
+      if (data === '[DONE]') continue
+      try {
+        const parsed = JSON.parse(data)
+        const text = parsed?.delta?.text || ''
+        if (text) {
+          fullText += text
+          onTextChunk(text)
+        }
+      } catch {}
+    }
+  }
+
+  return fullText
+}
+
 async function anthropicText({ apiKey, model, systemPrompt, messages, maxTokens = 900, temperature = 0.2 }) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -289,7 +341,9 @@ export default async function handler(req, res) {
       res.setHeader('Cache-Control', 'no-cache')
       res.setHeader('Connection', 'keep-alive')
 
-      const streamedText = await collectAnthropicStreamText(response)
+      const streamedText = await relayAnthropicStreamToClient(response, (chunk) => {
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`)
+      })
       const finalText = await ensureScorecardQuality({
         text: streamedText,
         enabled: scorecardValidationEnabled,
@@ -299,7 +353,11 @@ export default async function handler(req, res) {
         anthropicMessages,
       })
 
-      if (finalText) res.write(`data: ${JSON.stringify({ text: finalText })}\n\n`)
+      // Si la post-validación alteró el resultado final, enviamos el texto completo corregido
+      // para que el cliente termine con la versión consolidada.
+      if (finalText && finalText !== streamedText) {
+        res.write(`data: ${JSON.stringify({ text: finalText })}\n\n`)
+      }
       res.write('data: [DONE]\n\n')
       res.end()
     } else {
