@@ -11,24 +11,36 @@ export async function callClaude({
   const timeoutId = setTimeout(() => controller.abort(), 120000)
 
   let response
+  const maxRetries = 3
+  const baseDelayMs = 2000
   try {
-    response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        system,
-        messages,
-        stream: !!onChunk,
-        advisoryProfile,
-        ...(Array.isArray(advisoryCandidatesFromClient)
-          ? { advisoryCandidatesFromClient }
-          : {}),
-        ...(skipAdvisoryContext ? { skipAdvisoryContext: true } : {}),
-      }),
-      signal: controller.signal,
-    })
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          system,
+          messages,
+          stream: !!onChunk,
+          advisoryProfile,
+          ...(Array.isArray(advisoryCandidatesFromClient)
+            ? { advisoryCandidatesFromClient }
+            : {}),
+          ...(skipAdvisoryContext ? { skipAdvisoryContext: true } : {}),
+        }),
+        signal: controller.signal,
+      })
+
+      if (![429, 503].includes(response.status) || attempt === maxRetries) break
+
+      const retryAfterHeader = Number(response.headers.get('Retry-After'))
+      const retryAfterMs = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+        ? retryAfterHeader * 1000
+        : baseDelayMs * attempt + Math.floor(Math.random() * 700)
+      await new Promise((resolve) => setTimeout(resolve, retryAfterMs))
+    }
   } catch (err) {
     clearTimeout(timeoutId)
     if (err.name === 'AbortError') {
