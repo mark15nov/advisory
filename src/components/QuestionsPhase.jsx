@@ -6,6 +6,15 @@ import { SYSTEM_PROMPTS } from '../lib/session'
 
 const TOTAL_QUESTIONS = 5
 
+/** Quita restos que a veces añade el modelo (sección de advisors del plan ejecutivo). */
+function stripDiagnosticQuestionNoise(text) {
+  if (!text || typeof text !== 'string') return ''
+  let t = text.trim()
+  t = t.replace(/\s*(\*{0,2}\s*)*(#{1,6}\s*)?ADVISORS\s+RECOMENDADOS[\s\S]*$/i, '')
+  t = t.replace(/\s*---+[\s]*$/, '')
+  return t.trim()
+}
+
 export default function QuestionsPhase({ session, onComplete, initialHistory }) {
   const hasInitial = initialHistory && initialHistory.length > 0
   // qa: array of { question, answer } pairs
@@ -91,7 +100,8 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
         },
       })
 
-      const newQa = [...currentQa, { question: streamed, answer: null }]
+      const cleaned = stripDiagnosticQuestionNoise(streamed)
+      const newQa = [...currentQa, { question: cleaned, answer: null }]
       setQa(newQa)
       setStreamingQuestion('')
       setError(null)
@@ -181,7 +191,7 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
           <div key={i} style={styles.qaBlock}>
             <div style={styles.questionBubble}>
               <span style={styles.roleTag}>CONSEJO IA — PREGUNTA {i + 1}</span>
-              <p style={styles.questionText}>{item.question}</p>
+              <p style={styles.questionText}>{stripDiagnosticQuestionNoise(item.question)}</p>
             </div>
             {item.answer && editingIndex === i ? (
               <div style={{ ...styles.answerBubble, borderColor: 'var(--gold)' }}>
@@ -233,7 +243,7 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
           <div style={styles.qaBlock}>
             <div style={{ ...styles.questionBubble, borderColor: 'var(--gold)', opacity: 0.85 }}>
               <span style={styles.roleTag}>CONSEJO IA — PREGUNTA {questionCount + 1}</span>
-              <p style={styles.questionText}>{streamingQuestion}<span style={styles.cursor}>|</span></p>
+              <p style={styles.questionText}>{stripDiagnosticQuestionNoise(streamingQuestion)}<span style={styles.cursor}>|</span></p>
             </div>
           </div>
         )}
