@@ -274,6 +274,9 @@ export default async function handler(req, res) {
       let parsedError = null
       try { parsedError = JSON.parse(rawError) } catch {}
       console.error('Anthropic error:', rawError)
+      if (response.status === 429 || response.status === 503) {
+        res.setHeader('Retry-After', '8')
+      }
       return res.status(response.status).json({
         error: { message: parsedError?.error?.message || rawError || 'Error de Anthropic' },
       })
