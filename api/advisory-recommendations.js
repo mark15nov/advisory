@@ -2,6 +2,7 @@ import {
   scoreAdvisoryRows,
   pickTopAdvisoryCandidates,
 } from '../src/lib/advisoryPick.js'
+import { verifySupabaseJwt, getBearerTokenFromRequest } from '../src/lib/verifySupabaseJwt.js'
 
 async function fetchRowsAndPick(profile) {
   const SUPABASE_URL = process.env.SUPABASE_URL
@@ -29,6 +30,16 @@ async function fetchRowsAndPick(profile) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: { message: 'Method not allowed' } })
+  }
+
+  const token = getBearerTokenFromRequest(req)
+  const { user } = await verifySupabaseJwt(
+    token,
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+  )
+  if (!user) {
+    return res.status(401).json({ error: { message: 'Sesión requerida o inválida' } })
   }
 
   const profile = req.body

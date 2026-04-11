@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Loader2, Sparkles, Printer, ChevronLeft, ChevronRight, Users } from 'lucide-react'
 import { callClaude } from '../hooks/useClaude'
+import { authedFetch } from '../lib/authedFetch'
 import { SYSTEM_PROMPTS } from '../lib/session'
 
 const markdownComponents = {
@@ -124,7 +125,7 @@ export default function SynthesisPhase({ session, questionHistory, experts, onDo
     ;(async () => {
       let list = []
       try {
-        const r = await fetch('/api/advisory-recommendations', {
+        const r = await authedFetch('/api/advisory-recommendations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(profile),

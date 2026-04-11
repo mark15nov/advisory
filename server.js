@@ -6,6 +6,7 @@ import {
   buildAdvisoryContext,
   normalizeClientAdvisoryCandidates,
 } from './src/lib/advisoryPick.js'
+import { verifySupabaseJwt, getBearerTokenFromRequest } from './src/lib/verifySupabaseJwt.js'
 
 function loadEnvFromFile(relPath) {
   try {
@@ -40,6 +41,24 @@ if (!ANTHROPIC_API_KEY) {
 
 const MAX_RETRIES = 3
 
+async function requireSupabaseAuth(req, res, next) {
+  const token = getBearerTokenFromRequest(req)
+  if (!token) {
+    return res.status(401).json({ error: { message: 'Sesión requerida. Inicia sesión de nuevo.' } })
+  }
+  const SUPABASE_URL = process.env.SUPABASE_URL
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return res.status(503).json({ error: { message: 'Supabase no configurado en el servidor' } })
+  }
+  const { user } = await verifySupabaseJwt(token, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  if (!user) {
+    return res.status(401).json({ error: { message: 'Sesión inválida o expirada' } })
+  }
+  req.authUser = user
+  next()
+}
+
 async function fetchAdvisoryCandidates(profile) {
   const SUPABASE_URL = process.env.SUPABASE_URL
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -63,7 +82,7 @@ async function fetchAdvisoryCandidates(profile) {
   return pickTopAdvisoryCandidates(sorted)
 }
 
-app.post('/api/advisory-recommendations', async (req, res) => {
+app.post('/api/advisory-recommendations', requireSupabaseAuth, async (req, res) => {
   const profile = req.body
   if (!profile || typeof profile !== 'object') {
     return res.status(400).json({ error: { message: 'Body inválido' } })
@@ -186,7 +205,7 @@ async function callAnthropic({ system, advisoryContext, messages, stream, maxTok
   }), { status: 404, headers: { 'Content-Type': 'application/json' } })
 }
 
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', requireSupabaseAuth, async (req, res) => {
   const {
     system,
     messages,
