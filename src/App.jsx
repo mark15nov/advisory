@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { ChevronLeft, Home, LogOut, Pause, Play } from 'lucide-react'
 import { useAuth } from './context/AuthContext'
-import Dashboard, { saveToHistory } from './components/Dashboard'
+import Dashboard from './components/Dashboard'
+import { upsertAdvisorySession } from './lib/advisorySessions'
 import SetupPhase from './components/SetupPhase'
 import QuestionsPhase from './components/QuestionsPhase'
 import ExpertsPhase from './components/ExpertsPhase'
@@ -130,7 +131,7 @@ function SessionTimer({ startTime, paused, elapsedWhenPaused, onTogglePause }) {
 }
 
 export default function App() {
-  const { signOut } = useAuth()
+  const { signOut, user } = useAuth()
   const saved = loadSaved()
   const [view, setView] = useState('dashboard')
   const [phase, setPhase] = useState(saved?.phase ?? PHASES.SETUP)
@@ -281,10 +282,9 @@ export default function App() {
       planOutput: plan,
       completed,
     }
-    const history = (JSON.parse(localStorage.getItem('advisory-history') || '[]'))
-      .filter(h => h.id !== entry.id)
-    history.unshift(entry)
-    localStorage.setItem('advisory-history', JSON.stringify(history))
+    upsertAdvisorySession(user.id, entry).then(({ error }) => {
+      if (error) console.error('No se pudo guardar la sesión en Supabase:', error.message)
+    })
   }
 
   // Dashboard view

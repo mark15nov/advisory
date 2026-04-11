@@ -1,36 +1,60 @@
 // src/components/Dashboard.jsx
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Plus, Clock, Building2, User, Trash2, Eye, ChevronRight } from 'lucide-react'
-
-const HISTORY_KEY = 'advisory-history'
-
-export function loadHistory() {
-  try {
-    const raw = localStorage.getItem(HISTORY_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
-  }
-}
-
-export function saveToHistory(entry) {
-  const history = loadHistory()
-  history.unshift(entry)
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history))
-}
-
-export function deleteFromHistory(id) {
-  const history = loadHistory().filter(h => h.id !== id)
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history))
-}
+import { useAuth } from '../context/AuthContext'
+import {
+  fetchAdvisorySessions,
+  deleteAdvisorySession,
+  migrateLocalHistoryToSupabase,
+  loadLocalHistory,
+} from '../lib/advisorySessions'
 
 export default function Dashboard({ onNewSession, onViewSession }) {
-  const [sessions, setSessions] = useState(loadHistory)
+  const { user } = useAuth()
+  const [sessions, setSessions] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
 
-  function handleDelete(id) {
+  const refreshSessions = useCallback(async () => {
+    if (!user?.id) {
+      setSessions(loadLocalHistory())
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    setLoadError(null)
+    const mig = await migrateLocalHistoryToSupabase(user.id)
+    if (mig.error) {
+      console.error('Migración local → Supabase:', mig.error.message)
+    }
+    const { data, error } = await fetchAdvisorySessions(user.id)
+    if (error) {
+      setLoadError('No se pudieron cargar las sesiones desde el servidor.')
+      setSessions(loadLocalHistory())
+    } else {
+      setSessions(data || [])
+    }
+    setLoading(false)
+  }, [user?.id])
+
+  useEffect(() => {
+    refreshSessions()
+  }, [refreshSessions])
+
+  async function handleDelete(id) {
     if (!confirm('¿Eliminar esta sesión?')) return
-    deleteFromHistory(id)
-    setSessions(loadHistory())
+    if (user?.id) {
+      const { error } = await deleteAdvisorySession(user.id, id)
+      if (error) {
+        alert('No se pudo eliminar la sesión. Intenta de nuevo.')
+        return
+      }
+      await refreshSessions()
+    } else {
+      const next = loadLocalHistory().filter((h) => h.id !== id)
+      localStorage.setItem('advisory-history', JSON.stringify(next))
+      setSessions(next)
+    }
   }
 
   function formatDate(ts) {
@@ -56,7 +80,15 @@ export default function Dashboard({ onNewSession, onViewSession }) {
         </button>
       </div>
 
-      {sessions.length === 0 ? (
+      {loading ? (
+        <div style={styles.empty}>
+          <p style={styles.emptyText}>Cargando sesiones…</p>
+        </div>
+      ) : loadError ? (
+        <p style={styles.errorBanner}>{loadError}</p>
+      ) : null}
+
+      {!loading && sessions.length === 0 ? (
         <div style={styles.empty}>
           <div style={styles.emptyIcon}>
             <Building2 size={40} strokeWidth={1} />
@@ -70,7 +102,7 @@ export default function Dashboard({ onNewSession, onViewSession }) {
             Crear primera sesión
           </button>
         </div>
-      ) : (
+      ) : !loading ? (
         <div style={styles.grid}>
           {sessions.map((s) => (
             <div key={s.id} style={styles.card}>
@@ -120,7 +152,7 @@ export default function Dashboard({ onNewSession, onViewSession }) {
             </div>
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -198,6 +230,14 @@ const styles = {
     fontSize: 14,
     color: 'var(--text-muted)',
     maxWidth: 400,
+  },
+  errorBanner: {
+    fontSize: 13,
+    color: 'var(--red, #c62828)',
+    padding: '12px 16px',
+    background: 'var(--red-dim, rgba(198,40,40,0.08))',
+    borderRadius: 6,
+    border: '1px solid var(--border)',
   },
   grid: {
     display: 'grid',
