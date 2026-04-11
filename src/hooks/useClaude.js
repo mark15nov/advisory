@@ -1,4 +1,6 @@
 // src/hooks/useClaude.js
+import { authedFetch } from '../lib/authedFetch'
+
 export async function callClaude({
   system,
   messages,
@@ -15,7 +17,7 @@ export async function callClaude({
   const baseDelayMs = 2000
   try {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      response = await fetch('/api/chat', {
+      response = await authedFetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

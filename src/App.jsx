@@ -1,6 +1,7 @@
 ﻿// src/App.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { ChevronLeft, Home, Pause, Play } from 'lucide-react'
+import { ChevronLeft, Home, LogOut, Pause, Play } from 'lucide-react'
+import { useAuth } from './context/AuthContext'
 import Dashboard, { saveToHistory } from './components/Dashboard'
 import SetupPhase from './components/SetupPhase'
 import QuestionsPhase from './components/QuestionsPhase'
@@ -129,6 +130,7 @@ function SessionTimer({ startTime, paused, elapsedWhenPaused, onTogglePause }) {
 }
 
 export default function App() {
+  const { signOut } = useAuth()
   const saved = loadSaved()
   const [view, setView] = useState('dashboard')
   const [phase, setPhase] = useState(saved?.phase ?? PHASES.SETUP)
@@ -295,7 +297,12 @@ export default function App() {
             <span style={styles.brandSub}>Business Boards</span>
           </div>
           <div />
-          <div />
+          <div style={styles.navRight}>
+            <button type="button" style={styles.signOutBtn} onClick={() => signOut()} title="Cerrar sesión">
+              <LogOut size={14} />
+              Salir
+            </button>
+          </div>
         </nav>
         <main style={styles.main}>
           <Dashboard
@@ -381,6 +388,10 @@ export default function App() {
               Nueva sesión
             </button>
           )}
+          <button type="button" style={styles.signOutBtn} onClick={() => signOut()} title="Cerrar sesión">
+            <LogOut size={14} />
+            Salir
+          </button>
         </div>
       </nav>
 
@@ -507,6 +518,18 @@ const styles = {
     background: 'none', border: '1px solid var(--border)',
     color: 'var(--text-muted)', borderRadius: 4,
     padding: '6px 12px', fontSize: 12, cursor: 'pointer',
+  },
+  signOutBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    background: 'none',
+    border: '1px solid var(--border)',
+    color: 'var(--text-muted)',
+    borderRadius: 4,
+    padding: '6px 12px',
+    fontSize: 12,
+    cursor: 'pointer',
   },
   main: { flex: 1, overflowY: 'auto' },
 }

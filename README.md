@@ -13,11 +13,20 @@ npm install
 
 ### Variables de entorno requeridas
 
-Para esta versión, define en `.env`:
+Para esta versión, define en `.env` o `.env.local`:
 
-- `GEMINI_API_KEY`
+- `GEMINI_API_KEY` (o `ANTHROPIC_API_KEY` según uses)
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `VITE_SUPABASE_URL` — misma URL que `SUPABASE_URL` (visible al navegador para Auth)
+- `VITE_SUPABASE_ANON_KEY` — clave **anon public** del proyecto (Project Settings → API en Supabase; **no** uses la service role en el cliente)
+
+### Autenticación y usuarios permitidos
+
+1. En [Supabase](https://supabase.com/dashboard) abre tu proyecto → **Authentication** → **Users**.
+2. Crea cada cuenta con **Add user** (correo + contraseña) o **Invite user**. No hace falta pantalla de registro en la app: solo existen los usuarios que crees ahí.
+3. En **Authentication** → **Providers** → **Email**, desactiva el registro público si quieres que nadie pueda auto-registrarse (según la versión del panel: deshabilitar “Sign ups” / confirmar solo invitaciones o usuarios creados por admin).
+4. Tras cambiar variables `VITE_*`, reinicia `npm run dev` para que Vite las cargue.
 
 > ⚠️ **IMPORTANTE**: Esta app llama a `api.anthropic.com` desde el navegador.
 > Para producción, crea un backend proxy que maneje la API key de forma segura.

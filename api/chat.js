@@ -4,6 +4,7 @@ import {
   buildAdvisoryContext,
   normalizeClientAdvisoryCandidates,
 } from '../src/lib/advisoryPick.js'
+import { verifySupabaseJwt, getBearerTokenFromRequest } from '../src/lib/verifySupabaseJwt.js'
 
 const SCORECARD_SUSPICIOUS_TRIPLES = new Set([
   '9-6-9',
@@ -200,6 +201,16 @@ ${text}`,
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: { message: 'Method not allowed' } })
+  }
+
+  const token = getBearerTokenFromRequest(req)
+  const { user } = await verifySupabaseJwt(
+    token,
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+  )
+  if (!user) {
+    return res.status(401).json({ error: { message: 'Sesión requerida o inválida' } })
   }
 
   const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY

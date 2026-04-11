@@ -47,7 +47,7 @@ export default function Dashboard({ onNewSession, onViewSession }) {
           <div style={styles.badge}>CONSILIUM</div>
           <h1 style={styles.title}>Advisory Business Boards</h1>
           <p style={styles.subtitle}>
-            Plataforma de foros de consejo empresarial con inteligencia artificial.
+            Compartiendo experiencia empresarial con IA.
           </p>
         </div>
         <button style={styles.newBtn} onClick={onNewSession}>
