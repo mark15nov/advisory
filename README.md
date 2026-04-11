@@ -28,6 +28,8 @@ Para esta versión, define en `.env` o `.env.local`:
 3. En **Authentication** → **Providers** → **Email**, desactiva el registro público si quieres que nadie pueda auto-registrarse (según la versión del panel: deshabilitar “Sign ups” / confirmar solo invitaciones o usuarios creados por admin).
 4. Tras cambiar variables `VITE_*`, reinicia `npm run dev` para que Vite las cargue.
 
+5. **Persistencia de sesiones en Supabase:** en el panel del proyecto → **SQL Editor**, ejecuta el contenido de `supabase/migrations/20260411120000_advisory_sessions.sql` (tabla `advisory_sessions`, RLS y políticas por usuario). Si usas la CLI de Supabase, puedes aplicar la carpeta `supabase/migrations` con `supabase db push` o el flujo que uses en tu entorno.
+
 > ⚠️ **IMPORTANTE**: Esta app llama a `api.anthropic.com` desde el navegador.
 > Para producción, crea un backend proxy que maneje la API key de forma segura.
 > Para desarrollo local, puedes usar una extensión de Chrome que inyecte el header,
