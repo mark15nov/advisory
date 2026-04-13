@@ -1,6 +1,6 @@
 // src/components/Dashboard.jsx
 import React, { useState, useEffect, useCallback } from 'react'
-import { Plus, Clock, Building2, User, Trash2, Eye, ChevronRight } from 'lucide-react'
+import { Plus, Clock, Building2, User, Trash2, Eye, ChevronRight, Search, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import {
   fetchAdvisorySessions,
@@ -14,6 +14,8 @@ export default function Dashboard({ onNewSession, onViewSession }) {
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
 
   const refreshSessions = useCallback(async () => {
     if (!user?.id) {
@@ -64,6 +66,22 @@ export default function Dashboard({ onNewSession, onViewSession }) {
     })
   }
 
+  const normalizedSearch = searchTerm.trim().toLowerCase()
+  const filteredSessions = sessions.filter((s) => {
+    const matchesSearch =
+      normalizedSearch.length === 0 ||
+      [s.company, s.presenter, s.industry, s.caseText]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedSearch))
+
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'done' && s.completed) ||
+      (statusFilter === 'progress' && !s.completed)
+
+    return matchesSearch && matchesStatus
+  })
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -79,6 +97,57 @@ export default function Dashboard({ onNewSession, onViewSession }) {
           Nueva sesión
         </button>
       </div>
+
+      {!loading && sessions.length > 0 ? (
+        <div style={styles.filtersSection}>
+          <div style={styles.searchBox}>
+            <Search size={15} />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por empresa, presentador, industria o caso..."
+              style={styles.searchInput}
+            />
+            {searchTerm ? (
+              <button
+                type="button"
+                style={styles.clearSearchBtn}
+                onClick={() => setSearchTerm('')}
+                title="Limpiar búsqueda"
+              >
+                <X size={14} />
+              </button>
+            ) : null}
+          </div>
+          <div style={styles.filterRow}>
+            <button
+              type="button"
+              style={{ ...styles.filterChip, ...(statusFilter === 'all' ? styles.filterChipActive : {}) }}
+              onClick={() => setStatusFilter('all')}
+            >
+              Todas
+            </button>
+            <button
+              type="button"
+              style={{ ...styles.filterChip, ...(statusFilter === 'progress' ? styles.filterChipActive : {}) }}
+              onClick={() => setStatusFilter('progress')}
+            >
+              En progreso
+            </button>
+            <button
+              type="button"
+              style={{ ...styles.filterChip, ...(statusFilter === 'done' ? styles.filterChipActive : {}) }}
+              onClick={() => setStatusFilter('done')}
+            >
+              Completadas
+            </button>
+          </div>
+          <p style={styles.resultCount}>
+            {filteredSessions.length} resultado{filteredSessions.length === 1 ? '' : 's'}
+          </p>
+        </div>
+      ) : null}
 
       {loading ? (
         <div style={styles.empty}>
@@ -102,9 +171,29 @@ export default function Dashboard({ onNewSession, onViewSession }) {
             Crear primera sesión
           </button>
         </div>
+      ) : !loading && sessions.length > 0 && filteredSessions.length === 0 ? (
+        <div style={styles.empty}>
+          <div style={styles.emptyIcon}>
+            <Search size={40} strokeWidth={1} />
+          </div>
+          <h3 style={styles.emptyTitle}>No hay coincidencias</h3>
+          <p style={styles.emptyText}>
+            Ajusta los filtros o limpia la búsqueda para ver tus sesiones.
+          </p>
+          <button
+            type="button"
+            style={styles.newBtn}
+            onClick={() => {
+              setSearchTerm('')
+              setStatusFilter('all')
+            }}
+          >
+            Limpiar filtros
+          </button>
+        </div>
       ) : !loading ? (
         <div style={styles.grid}>
-          {sessions.map((s) => (
+          {filteredSessions.map((s) => (
             <div key={s.id} style={styles.card}>
               <div style={styles.cardTop}>
                 <div style={styles.cardStatus}>
@@ -194,6 +283,65 @@ const styles = {
     color: 'var(--text-muted)',
     lineHeight: 1.6,
     marginTop: 8,
+  },
+  filtersSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+  },
+  searchBox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    border: '1px solid var(--border)',
+    borderRadius: 8,
+    padding: '10px 12px',
+    color: 'var(--text-muted)',
+    background: 'var(--surface)',
+  },
+  searchInput: {
+    flex: 1,
+    border: 'none',
+    outline: 'none',
+    background: 'transparent',
+    color: 'var(--text)',
+    fontSize: 14,
+  },
+  clearSearchBtn: {
+    border: 'none',
+    background: 'none',
+    color: 'var(--text-dim)',
+    cursor: 'pointer',
+    padding: 2,
+    borderRadius: 4,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  filterChip: {
+    border: '1px solid var(--border)',
+    background: 'var(--surface)',
+    color: 'var(--text-muted)',
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 500,
+    padding: '6px 12px',
+    cursor: 'pointer',
+  },
+  filterChipActive: {
+    border: '1px solid var(--gold)',
+    color: 'var(--gold)',
+    background: 'var(--gold-dim)',
+  },
+  resultCount: {
+    fontSize: 12,
+    color: 'var(--text-dim)',
   },
   newBtn: {
     display: 'flex',
