@@ -1,5 +1,5 @@
 // src/components/SynthesisPhase.jsx
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Loader2, Sparkles, Printer, ChevronLeft, ChevronRight, Users } from 'lucide-react'
@@ -103,12 +103,17 @@ function stripRedundantCompanyHeadingMarkdown(markdown, company) {
   return rest.length ? rest : markdown
 }
 
-export default function SynthesisPhase({ session, questionHistory, experts, onDone }) {
-  const [output, setOutput] = useState('')
-  const [done, setDone] = useState(false)
+export default function SynthesisPhase({ session, questionHistory, experts, onDone, initialPlanOutput }) {
+  const cachedPlanAtMount =
+    typeof initialPlanOutput === 'string' && initialPlanOutput.trim() ? initialPlanOutput.trim() : ''
+  const [output, setOutput] = useState(() => cachedPlanAtMount)
+  const [done, setDone] = useState(() => Boolean(cachedPlanAtMount))
   const [currentSlide, setCurrentSlide] = useState(0)
   const [directoryAdvisors, setDirectoryAdvisors] = useState([])
   const [directoryStatus, setDirectoryStatus] = useState('loading')
+  /** Evita re-ejecutar el efecto cuando el padre asigna planOutput tras generar (mismo mount). */
+  const initialPlanRef = useRef(initialPlanOutput)
+  initialPlanRef.current = initialPlanOutput
 
   useEffect(() => {
     let cancelled = false
@@ -147,6 +152,17 @@ export default function SynthesisPhase({ session, questionHistory, experts, onDo
         }
       }
       if (cancelled) return
+      const cached =
+        typeof initialPlanRef.current === 'string' && initialPlanRef.current.trim()
+          ? initialPlanRef.current.trim()
+          : ''
+      if (cached) {
+        if (!cancelled) {
+          setOutput(cached)
+          setDone(true)
+        }
+        return
+      }
       await generate(list, () => cancelled)
     })()
     return () => { cancelled = true }
@@ -1370,6 +1386,14 @@ const synthesisStyles = `
       border-bottom: 1px solid #e0e0e0 !important;
       page-break-inside: auto;
       break-inside: auto;
+    }
+    .print-all-sections .plan-section {
+      page-break-before: always;
+      break-before: page;
+    }
+    .print-all-sections .plan-section:first-of-type {
+      page-break-before: auto;
+      break-before: auto;
     }
     .plan-section:last-child {
       border-bottom: none !important;

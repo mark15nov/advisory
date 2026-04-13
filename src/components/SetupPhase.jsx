@@ -162,11 +162,13 @@ export default function SetupPhase({ onStart, initialData, timerRunning, onStart
               onChange={e => setRevenue(e.target.value)}
             >
               <option value="">Selecciona...</option>
-              <option value="<1M">Menos de $1M</option>
-              <option value="1M-5M">$1M – $5M</option>
-              <option value="5M-20M">$5M – $20M</option>
-              <option value="20M-100M">$20M – $100M</option>
-              <option value="100M+">Más de $100M</option>
+              <option value="<5 MDP">Menos de 5 MDP</option>
+              <option value="5-10 MDP">5 a 10 MDP</option>
+              <option value="11-50 MDP">11 a 50 MDP</option>
+              <option value="51-100 MDP">51 a 100 MDP</option>
+              <option value="100-200 MDP">100 a 200 MDP</option>
+              <option value="200-500 MDP">200 a 500 MDP</option>
+              <option value="500+ MDP">500 en adelante</option>
             </select>
           </div>
         </div>
