@@ -16,6 +16,7 @@ const TIMER_KEY = 'advisory-timer-start'
 const TIMER_PAUSED_KEY = 'advisory-timer-paused'
 const TIMER_ELAPSED_KEY = 'advisory-timer-elapsed'
 const TIMER_DURATION = 90 * 60
+const BRAND_LOGO_SRC = '/assets/logo.jpeg'
 
 function loadSaved() {
   try {
@@ -293,8 +294,7 @@ export default function App() {
       <div style={styles.root}>
         <nav style={styles.nav}>
           <div style={styles.brand}>
-            <span style={styles.brandName}>Advisory</span>
-            <span style={styles.brandSub}>Business Boards</span>
+            <img src={BRAND_LOGO_SRC} alt="Advisory Business Boards" style={styles.brandLogo} />
           </div>
           <div />
           <div style={styles.navRight}>
@@ -322,10 +322,7 @@ export default function App() {
           <button style={styles.homeBtn} onClick={goHome}>
             <Home size={16} />
           </button>
-          <div>
-            <span style={styles.brandName}>Advisory</span>
-            <span style={styles.brandSub}>Business Boards</span>
-          </div>
+          <img src={BRAND_LOGO_SRC} alt="Advisory Business Boards" style={styles.brandLogo} />
         </div>
 
         <div style={styles.stepper}>
@@ -453,6 +450,7 @@ export default function App() {
             session={session}
             questionHistory={questionHistory}
             experts={experts}
+            initialPlanOutput={planOutput || undefined}
             onDone={(plan) => {
               setPlanOutput(plan)
               saveCurrentSession(plan, true)
@@ -492,6 +490,13 @@ const styles = {
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
+  },
+  brandLogo: {
+    height: 40,
+    width: 'auto',
+    maxWidth: 320,
+    objectFit: 'contain',
+    display: 'block',
   },
   brandName: { fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: 'var(--text)', display: 'block' },
   brandSub: { fontSize: 10, letterSpacing: '0.12em', color: 'var(--text-dim)', textTransform: 'uppercase', display: 'block' },
