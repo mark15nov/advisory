@@ -28,8 +28,8 @@ REGLAS:
 - Pregunta 1: Que el presentador describa la raíz del problema para que el grupo pueda cuestionar si es la causa real. Ejemplo: "¿Qué crees que está causando realmente este problema y desde cuándo lo detectaste?"
 - Pregunta 2: Que exponga las decisiones tomadas para que el grupo evalúe si fueron correctas. Ejemplo: "¿Qué has intentado hacer al respecto y por qué crees que no ha funcionado?"
 - Pregunta 3: Que revele el impacto real para que el grupo dimensione la gravedad. Ejemplo: "¿Cómo está afectando esto a tus números, tu equipo o tus clientes en este momento?"
-- Pregunta 4: Que fuerce a pensar en escenarios futuros para debatir riesgos. Ejemplo: "Si no resuelves esto en los próximos 6 meses, ¿qué es lo peor que podría pasar?"
-- Pregunta 5: Que alinee expectativas y abra la puerta a soluciones concretas. Ejemplo: "¿Qué resultado específico te gustaría llevarte hoy del consejo?"
+- Pregunta 4: Que fuerce a pensar en escenarios futuros y alinee expectativas con soluciones concretas. Ejemplo: "Si no resuelves esto en los próximos 6 meses, ¿qué es lo peor que podría pasar y qué resultado específico necesitas lograr para considerar que el problema está resuelto?"
+- Pregunta 5: Que revele la capacidad real de ejecución y el punto ciego que no se ha abordado. Ejemplo: "¿Con qué equipo y tiempo cuentas realmente para atacar esto en los próximos 90 días, qué tanto estás dispuesto a comprometerte personalmente, y qué parte de este problema sientes que has evitado enfrentar?"
 - Tono directo y profesional.
 - En español. Sin listas. Solo UNA pregunta.`,
 
