@@ -143,9 +143,14 @@ export default function Dashboard({ onNewSession, onViewSession }) {
               Completadas
             </button>
           </div>
-          <p style={styles.resultCount}>
-            {filteredSessions.length} resultado{filteredSessions.length === 1 ? '' : 's'}
-          </p>
+          <div style={styles.resultMeta}>
+            <p style={styles.resultCount}>
+              {filteredSessions.length} resultado{filteredSessions.length === 1 ? '' : 's'}
+            </p>
+            {filteredSessions.length > 1 ? (
+              <p style={styles.scrollHint}>Desplázate hacia abajo para ver todas las sesiones.</p>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -339,9 +344,21 @@ const styles = {
     color: 'var(--gold)',
     background: 'var(--gold-dim)',
   },
+  resultMeta: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
   resultCount: {
     fontSize: 12,
     color: 'var(--text-dim)',
+    margin: 0,
+  },
+  scrollHint: {
+    fontSize: 12,
+    color: 'var(--text-muted)',
+    margin: 0,
+    lineHeight: 1.4,
   },
   newBtn: {
     display: 'flex',
@@ -387,10 +404,12 @@ const styles = {
     borderRadius: 6,
     border: '1px solid var(--border)',
   },
+  // Una columna: evita que solo se vean dos tarjetas lado a lado sin indicar que hay más al hacer scroll.
   grid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+    gridTemplateColumns: '1fr',
     gap: 16,
+    paddingBottom: 8,
   },
   card: {
     background: 'var(--surface)',

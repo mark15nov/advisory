@@ -83,6 +83,91 @@ function lineMatchesCompanyHeading(line, companyNorm) {
   return false
 }
 
+/**
+ * Extrae el contenido de la sección ## ADVISORS RECOMENDADOS del markdown completo.
+ */
+function extractAdvisorsSection(text) {
+  if (!text) return ''
+  const lines = text.replace(/\r\n/g, '\n').split('\n')
+  let inSection = false
+  const sectionLines = []
+  for (const line of lines) {
+    const m = line.match(/^#{1,2}\s+(.+)$/)
+    if (m) {
+      const t = m[1].trim().toUpperCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      if (t === 'ADVISORS RECOMENDADOS') {
+        inSection = true
+        continue
+      } else if (inSection) {
+        break
+      }
+    }
+    if (inSection) sectionLines.push(line)
+  }
+  return sectionLines.join('\n').trim()
+}
+
+/**
+ * Parsea el bloque de texto de ADVISORS RECOMENDADOS y devuelve un mapa
+ * normalizado_nombre → { ajuste, especialidad, justificacion }.
+ */
+function parseAdvisorsFromMarkdown(content) {
+  if (!content?.trim()) return {}
+  const normName = (s) =>
+    String(s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\*\*/g, '')
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+  const lines = content.replace(/\r\n/g, '\n').split('\n')
+  const blocks = []
+  let current = null
+  for (const line of lines) {
+    const m = line.match(/^\d+\.\s+(.+)/)
+    if (m) {
+      if (current) blocks.push(current)
+      current = { header: m[1], subLines: [] }
+    } else if (current) {
+      current.subLines.push(line)
+    }
+  }
+  if (current) blocks.push(current)
+
+  const result = {}
+  for (const block of blocks) {
+    const headerClean = block.header.replace(/\*\*/g, '').trim()
+    const ajusteInHeader = headerClean.match(/[—–\-]\s*Ajuste\s*[:.]?\s*(\w+)/i)
+    const nombre = headerClean.replace(/\s*[—–\-]\s*Ajuste.*$/i, '').trim()
+    let ajuste = ajusteInHeader ? ajusteInHeader[1].toUpperCase() : ''
+    let especialidad = ''
+    let justificacion = ''
+
+    const allLines = [block.header, ...block.subLines].map((l) =>
+      l.replace(/^[\s\-*•]+/, '').trim()
+    )
+    for (const l of allLines) {
+      if (/especialidad\s+clave\s*:/i.test(l)) {
+        especialidad = l.replace(/especialidad\s+clave\s*:\s*/i, '').replace(/\*\*/g, '').trim()
+      } else if (/justificaci[oó]n\s*:/i.test(l)) {
+        justificacion = l.replace(/justificaci[oó]n\s*:\s*/i, '').replace(/\*\*/g, '').trim()
+      } else if (!ajuste && /ajuste\s*[:.]?\s*(alto|medio)/i.test(l)) {
+        const am = l.match(/ajuste\s*[:.]?\s*(alto|medio)/i)
+        if (am) ajuste = am[1].toUpperCase()
+      }
+    }
+
+    if (nombre) {
+      result[normName(nombre)] = { nombre, ajuste, especialidad, justificacion }
+    }
+  }
+  return result
+}
+
 /** Quita título duplicado de empresa al inicio del markdown (sección Plan de acción). */
 function stripRedundantCompanyHeadingMarkdown(markdown, company) {
   if (!markdown?.trim() || !company?.trim()) return markdown
@@ -552,6 +637,19 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
   function renderDirectoryAdvisorsPanel({ printClass = '' } = {}) {
     const wrap = (inner) => <div className={`directory-advisors ${printClass}`.trim()}>{inner}</div>
 
+    // Parsea la justificación generada por el modelo para cada advisor
+    const advisorSection = extractAdvisorsSection(output)
+    const aiAdvisors = parseAdvisorsFromMarkdown(advisorSection)
+    const normAdvisorName = (s) =>
+      String(s || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\*\*/g, '')
+        .replace(/[^\w\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+
     if (directoryStatus === 'loading') {
       return wrap(
         <div className="directory-advisors-loading">
@@ -588,32 +686,70 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
           <p className="directory-advisors-sub">Hasta 3 perfiles del directorio, ordenados por ajuste al caso.</p>
         </div>
         <ol className="directory-advisors-list">
-          {directoryAdvisors.map((a, i) => (
-            <li key={a.id || `adv-${i}`} className="directory-advisors-item">
-              <span className="directory-advisor-rank">{i + 1}</span>
-              <div className="directory-advisor-body">
-                <div className="directory-advisor-nombre">{a.nombre}</div>
-                {(a.empresa || a.email || a.web) && (
-                  <div className="directory-advisor-contact">
-                    {a.empresa && <span>{a.empresa}</span>}
-                    {a.empresa && (a.email || a.web) && <span> · </span>}
-                    {a.email && (
-                      <a href={`mailto:${a.email}`} className="directory-advisor-link">{a.email}</a>
-                    )}
-                    {a.email && a.web && <span> · </span>}
-                    {a.web && (
-                      <a href={a.web.startsWith('http') ? a.web : `https://${a.web}`} target="_blank" rel="noopener noreferrer" className="directory-advisor-link">
-                        {a.web}
-                      </a>
-                    )}
+          {directoryAdvisors.map((a, i) => {
+            const aiEntry = aiAdvisors[normAdvisorName(a.nombre)]
+            const justification = (() => {
+              // 1. Justificación contextualizada al caso generada por el modelo
+              if (aiEntry?.justificacion?.trim()) return aiEntry.justificacion.trim()
+              // 2. fitSummary (score de encaje por tokens)
+              if (a.fitSummary?.trim()) return a.fitSummary.trim()
+              // 3. Especialidades / industrias del directorio
+              const parts = []
+              if (Array.isArray(a.especialidades) && a.especialidades.length > 0)
+                parts.push(`Especialidades: ${a.especialidades.slice(0, 4).join(', ')}.`)
+              if (Array.isArray(a.industrias) && a.industrias.length > 0)
+                parts.push(`Industrias: ${a.industrias.slice(0, 3).join(', ')}.`)
+              if (parts.length > 0) return parts.join(' ')
+              if (a.bio?.trim()) {
+                const b = a.bio.trim()
+                return b.length > 220 ? b.slice(0, 220) + '…' : b
+              }
+              if (a.productos_servicios?.trim()) {
+                const p = a.productos_servicios.trim()
+                return p.length > 220 ? p.slice(0, 220) + '…' : p
+              }
+              return 'Perfil seleccionado entre los mejores del directorio por ajuste al caso.'
+            })()
+            return (
+              <li key={a.id || `adv-${i}`} className="directory-advisors-item">
+                <span className="directory-advisor-rank">{i + 1}</span>
+                <div className="directory-advisor-body">
+                  <div className="directory-advisor-nombre">{a.nombre}</div>
+                  {(a.empresa || a.email || a.web) && (
+                    <div className="directory-advisor-contact">
+                      {a.empresa && <span>{a.empresa}</span>}
+                      {a.empresa && (a.email || a.web) && <span> · </span>}
+                      {a.email && (
+                        <a href={`mailto:${a.email}`} className="directory-advisor-link">{a.email}</a>
+                      )}
+                      {a.email && a.web && <span> · </span>}
+                      {a.web && (
+                        <a href={a.web.startsWith('http') ? a.web : `https://${a.web}`} target="_blank" rel="noopener noreferrer" className="directory-advisor-link">
+                          {a.web}
+                        </a>
+                      )}
+                    </div>
+                  )}
+                  {(aiEntry?.ajuste || aiEntry?.especialidad) && (
+                    <div className="directory-advisor-meta">
+                      {aiEntry.ajuste && (
+                        <span className={`directory-advisor-ajuste directory-advisor-ajuste-${aiEntry.ajuste.toLowerCase()}`}>
+                          Ajuste: {aiEntry.ajuste}
+                        </span>
+                      )}
+                      {aiEntry.especialidad && (
+                        <span className="directory-advisor-especialidad">{aiEntry.especialidad}</span>
+                      )}
+                    </div>
+                  )}
+                  <div className="directory-advisor-justification">
+                    <span className="directory-advisor-why-label">Justificación</span>
+                    <p className="directory-advisor-why">{justification}</p>
                   </div>
-                )}
-                {a.fitSummary?.trim() && (
-                  <p className="directory-advisor-why">{a.fitSummary.trim()}</p>
-                )}
-              </div>
-            </li>
-          ))}
+                </div>
+              </li>
+            )
+          })}
         </ol>
       </>
     )
@@ -1016,11 +1152,40 @@ const synthesisStyles = `
   .directory-advisor-link:hover {
     text-decoration: underline;
   }
+  .directory-advisor-meta {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px;
+  }
+  .directory-advisor-ajuste {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+    padding: 2px 8px; border-radius: 20px; text-transform: uppercase;
+  }
+  .directory-advisor-ajuste-alto {
+    background: #e8f5e9; color: #2e7d32;
+  }
+  .directory-advisor-ajuste-medio {
+    background: #fff8e1; color: #e65100;
+  }
+  .directory-advisor-especialidad {
+    font-size: 12px; color: var(--text-muted); font-style: italic;
+  }
+  .directory-advisor-justification {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .directory-advisor-why-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
   .directory-advisor-why {
     font-size: 12px;
     color: var(--text-dim);
     line-height: 1.5;
-    margin: 8px 0 0 0;
+    margin: 0;
   }
 
   .slide-counter {
@@ -1304,9 +1469,7 @@ const synthesisStyles = `
     }
 
     .print-all-sections {
-      display: flex !important;
-      flex-direction: column !important;
-      gap: 0 !important;
+      display: block !important;
       padding: 36px 42px 28px !important;
     }
 
@@ -1319,6 +1482,7 @@ const synthesisStyles = `
       background: #f0f7ff !important;
     }
     .print-all-sections .directory-advisor-nombre { color: #1a1a2e !important; }
+    .print-all-sections .directory-advisor-why-label { color: #666 !important; }
     .print-all-sections .directory-advisor-why { color: #555 !important; }
 
     /* ---- COVER PAGE ---- */
@@ -1600,6 +1764,20 @@ const synthesisStyles = `
       widows: 3;
     }
     .plan-md-heading, .plan-md-heading-sm { color: #1a1a2e !important; }
+
+    /* Listas: conservar estilos normales, sin saltos de página por bullet */
+    .plan-markdown-ul,
+    .plan-markdown-ol {
+      display: block !important;
+      padding-left: 1.4em !important;
+      margin: 4px 0 !important;
+    }
+    .plan-markdown-li {
+      display: list-item !important;
+      margin: 0.3em 0 !important;
+      page-break-before: auto !important;
+      break-before: auto !important;
+    }
 
     /* ---- PRINT FOOTER ---- */
     .print-footer {

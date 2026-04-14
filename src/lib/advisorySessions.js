@@ -22,7 +22,8 @@ function clearLocalHistory() {
 function rowToEntry(row) {
   const p = row.payload
   if (p && typeof p === 'object') {
-    return { ...p, id: p.id ?? row.client_session_id }
+    // client_session_id es la clave única por fila; el payload podría traer id duplicado/erróneo.
+    return { ...p, id: String(row.client_session_id) }
   }
   return null
 }

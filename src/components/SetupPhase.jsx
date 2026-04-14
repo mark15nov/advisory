@@ -1,6 +1,26 @@
 ﻿// src/components/SetupPhase.jsx
 import React, { useState } from 'react'
-import { ArrowRight, Building2, User, MapPin, Users, DollarSign, Calendar, Briefcase, Target, Star, Play, Clock } from 'lucide-react'
+import { ArrowRight, Building2, User, MapPin, Users, DollarSign, Calendar, Briefcase, Target, Star, Play, Clock, Wand2 } from 'lucide-react'
+
+const IS_DEV = import.meta.env.DEV
+
+/** Textos de prueba que cumplen los mínimos de caracteres del formulario (solo desarrollo). */
+const DEV_CASE_FIXTURE = {
+  presenter: 'María Prueba López',
+  role: 'Directora General',
+  company: 'Empresa Demo S.A. de C.V.',
+  industry: 'Servicios profesionales',
+  location: 'Ciudad de México',
+  employees: '11-50',
+  revenue: '5-10 MDP',
+  yearsInBusiness: '8',
+  whatYouDo:
+    'Consultoría y capacitación para pymes en procesos operativos y ventas, con enfoque en manufactura ligera y comercio.',
+  differentiation:
+    'Combinamos diagnóstico rápido en planta con acompañamiento quincenal; no vendemos paquetes genéricos sino rutas de mejora medibles. Nuestro equipo tiene experiencia mixta industria + retail y hablamos el lenguaje del dueño. Esto es texto de prueba para desarrollo.',
+  caseText:
+    'Necesitamos priorizar en qué invertir los próximos seis meses: abrir una segunda línea de producto o fortalecer la fuerza de ventas actual. Tenemos presión de flujo y un equipo pequeño; el consejo nos ayudaría a definir criterios, riesgos y un plan de acción concreto. Buscamos orientación práctica, no teoría. Este párrafo es contenido de prueba autogenerado para validar el flujo en desarrollo sin escribir el caso a mano cada vez; debe superar los doscientos caracteres requeridos por el formulario.',
+}
 
 export default function SetupPhase({ onStart, initialData, timerRunning, onStartTimer }) {
   const [presenter, setPresenter] = useState(initialData?.presenter || '')
@@ -23,6 +43,21 @@ export default function SetupPhase({ onStart, initialData, timerRunning, onStart
     differentiation.trim().length >= 100 &&
     caseText.trim().length >= 200
 
+  function applyDevAutofill() {
+    const d = DEV_CASE_FIXTURE
+    setPresenter(d.presenter)
+    setRole(d.role)
+    setCompany(d.company)
+    setIndustry(d.industry)
+    setLocation(d.location)
+    setEmployees(d.employees)
+    setRevenue(d.revenue)
+    setYearsInBusiness(d.yearsInBusiness)
+    setWhatYouDo(d.whatYouDo)
+    setDifferentiation(d.differentiation)
+    setCaseText(d.caseText)
+  }
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -44,6 +79,13 @@ export default function SetupPhase({ onStart, initialData, timerRunning, onStart
           <Clock size={14} />
           Sesión en curso — el temporizador está corriendo
         </div>
+      )}
+
+      {IS_DEV && (
+        <button type="button" style={styles.devAutofillBtn} onClick={applyDevAutofill}>
+          <Wand2 size={15} />
+          Autollenar caso (solo desarrollo)
+        </button>
       )}
 
       <div style={styles.form}>
@@ -398,5 +440,21 @@ const styles = {
     fontWeight: 500,
     color: 'var(--gold)',
     width: '100%',
+  },
+  devAutofillBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    width: '100%',
+    background: 'var(--surface)',
+    border: '1px dashed var(--border)',
+    color: 'var(--text-muted)',
+    borderRadius: 8,
+    padding: '10px 16px',
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'border-color 0.2s, background 0.2s',
   },
 }
