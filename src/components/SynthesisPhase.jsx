@@ -411,25 +411,48 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
     if (blocks.length === 0) return null
 
     const blockColors = ['var(--red)', 'var(--accent)', 'var(--green)']
+    const blockColorsPrint = ['#c62828', '#1565c0', '#2e7d32']
+    const phaseLabels = ['FASE 1', 'FASE 2', 'FASE 3']
+    const phaseIcons = [
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="12" width="6" height="10" rx="1"/><rect x="9" y="8" width="6" height="14" rx="1"/><rect x="16" y="4" width="6" height="18" rx="1"/></svg>,
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>,
+    ]
 
     return (
       <div className="timeline-container">
-        {blocks.map((block, i) => (
-          <div key={i} className="timeline-block">
-            <div className="timeline-header" style={{ background: blockColors[i] || blockColors[0] }}>
-              <span className="timeline-range">{block.range}</span>
-              <span className="timeline-title">{block.title}</span>
+        {/* Barra de progreso superior */}
+        <div className="timeline-progress-bar">
+          {blocks.map((_, i) => (
+            <div key={i} className="timeline-progress-segment" style={{ background: blockColors[i] || blockColors[0] }}>
+              <span className="timeline-progress-label">{phaseLabels[i] || `FASE ${i + 1}`}</span>
             </div>
-            <div className="timeline-items">
-              {block.items.map((item, j) => (
-                <div key={j} className="timeline-item">
-                  <span className="timeline-dot" style={{ background: blockColors[i] || blockColors[0] }} />
-                  <span>{item}</span>
+          ))}
+        </div>
+        {/* Bloques de fases */}
+        <div className="timeline-phases">
+          {blocks.map((block, i) => (
+            <div key={i} className="timeline-block">
+              <div className="timeline-header" style={{ '--phase-color': blockColors[i] || blockColors[0], '--phase-color-print': blockColorsPrint[i] || blockColorsPrint[0] }}>
+                <div className="timeline-header-top">
+                  <span className="timeline-phase-icon">{phaseIcons[i] || '📋'}</span>
+                  <div className="timeline-header-text">
+                    <span className="timeline-range">Días {block.range}</span>
+                    <span className="timeline-title">{block.title}</span>
+                  </div>
                 </div>
-              ))}
+              </div>
+              <div className="timeline-items">
+                {block.items.map((item, j) => (
+                  <div key={j} className="timeline-item">
+                    <span className="timeline-item-num" style={{ background: blockColors[i] || blockColors[0] }}>{j + 1}</span>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     )
   }
@@ -1214,7 +1237,8 @@ const synthesisStyles = `
     background: var(--surface); border: 1px solid var(--border);
     border-radius: 12px; padding: 32px;
     display: flex; flex-direction: column; gap: 20px;
-    flex: 1; min-height: 300px;
+    flex: 1; min-height: 300px; min-width: 0;
+    overflow-x: hidden;
     animation: slideIn 0.3s ease;
   }
   @keyframes slideIn {
@@ -1265,45 +1289,84 @@ const synthesisStyles = `
     font-family: var(--font-display); font-size: 18px; font-weight: 600;
     color: var(--gold); letter-spacing: 0.02em; margin: 0;
   }
-  .plan-section-content { display: flex; flex-direction: column; gap: 10px; }
+  .plan-section-content { display: flex; flex-direction: column; gap: 10px; min-width: 0; overflow: hidden; }
 
-  /* Markdown body (Gemini a veces devuelve ** y ### en lugar del formato fijo) */
+  /* Markdown body */
   .plan-markdown { display: flex; flex-direction: column; gap: 0.35em; min-width: 0; }
   .plan-markdown-p { margin: 0 0 0.5em 0; }
   .plan-markdown-p:last-child { margin-bottom: 0; }
-  .plan-markdown-ul, .plan-markdown-ol {
-    margin: 0.25em 0 0.75em 1.25em;
+  .plan-markdown-ul {
+    margin: 0.25em 0 0.75em 0;
     padding: 0;
     font-size: 14px;
     color: var(--text);
     line-height: 1.65;
+    list-style: none;
   }
-  .plan-markdown-li { margin: 0.25em 0; }
+  .plan-markdown-ol {
+    margin: 0.25em 0 0.75em 0;
+    padding: 0;
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.65;
+    list-style: none;
+    counter-reset: plan-ol;
+  }
+  .plan-markdown-ol > .plan-markdown-li {
+    counter-increment: plan-ol;
+    padding-left: 32px;
+    position: relative;
+  }
+  .plan-markdown-ol > .plan-markdown-li::before {
+    content: counter(plan-ol);
+    position: absolute; left: 0; top: 2px;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--gold); color: #fff;
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .plan-markdown-ul > .plan-markdown-li {
+    padding-left: 20px;
+    position: relative;
+  }
+  .plan-markdown-ul > .plan-markdown-li::before {
+    content: '';
+    position: absolute; left: 2px; top: 8px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--gold);
+  }
+  .plan-markdown-li { margin: 0.4em 0; }
   .plan-md-heading {
     font-family: var(--font-display);
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--text);
-    margin: 0.75em 0 0.35em 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--gold);
+    margin: 1em 0 0.35em 0;
     line-height: 1.3;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+    letter-spacing: 0.02em;
   }
   .plan-md-heading:first-child { margin-top: 0; }
   .plan-md-heading-sm {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 700;
     color: var(--text);
     margin: 0.6em 0 0.3em 0;
+    letter-spacing: 0.01em;
   }
-  .plan-md-strong { font-weight: 600; color: var(--text); }
+  .plan-md-strong { font-weight: 700; color: var(--text); }
   .plan-md-em { font-style: italic; }
   .plan-md-a { color: var(--accent); text-decoration: underline; word-break: break-all; }
   .plan-md-bq {
     margin: 0.5em 0;
-    padding: 8px 14px;
-    border-left: 3px solid var(--gold);
+    padding: 12px 18px;
+    border-left: 4px solid var(--gold);
     background: var(--surface-2);
+    border-radius: 0 6px 6px 0;
     font-size: 14px;
     color: var(--text-muted);
+    font-style: italic;
   }
   .plan-md-code-inline {
     font-family: var(--font-mono);
@@ -1406,31 +1469,58 @@ const synthesisStyles = `
 
   /* Timeline */
   .timeline-container {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;
+    display: flex; flex-direction: column; gap: 0;
+    min-width: 0; width: 100%; box-sizing: border-box;
+  }
+  .timeline-progress-bar {
+    display: flex; border-radius: 4px; overflow: hidden; height: 24px; margin-bottom: 14px;
+  }
+  .timeline-progress-segment {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+  }
+  .timeline-progress-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: #fff;
+  }
+  .timeline-phases {
+    display: flex; flex-direction: column; gap: 12px;
   }
   .timeline-block {
     display: flex; flex-direction: column;
-    border: 1px solid var(--border); overflow: hidden;
+    border: 1px solid var(--border); border-radius: 6px;
+    border-left: 3px solid var(--phase-color);
+    min-width: 0; overflow: hidden;
   }
-  .timeline-block:first-child { border-radius: 8px 0 0 8px; }
-  .timeline-block:last-child { border-radius: 0 8px 8px 0; }
-  .timeline-block:not(:last-child) { border-right: none; }
   .timeline-header {
-    padding: 14px 16px; color: #fff;
-    display: flex; flex-direction: column; gap: 2px;
-  }
-  .timeline-range { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; opacity: 0.8; }
-  .timeline-title { font-size: 13px; font-weight: 600; }
-  .timeline-items {
-    padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; flex: 1;
+    padding: 10px 14px;
     background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+  }
+  .timeline-header-top {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .timeline-phase-icon {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--phase-color); flex-shrink: 0;
+  }
+  .timeline-header-text {
+    display: flex; flex-direction: column; gap: 1px;
+  }
+  .timeline-range {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    color: var(--phase-color); text-transform: uppercase;
+  }
+  .timeline-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .timeline-items {
+    padding: 10px 14px; display: flex; flex-direction: column; gap: 8px;
   }
   .timeline-item {
     display: flex; align-items: flex-start; gap: 10px;
-    font-size: 13px; color: var(--text); line-height: 1.5;
+    font-size: 12px; color: var(--text); line-height: 1.5;
   }
-  .timeline-dot {
-    width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0;
+  .timeline-item-num {
+    width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: #fff; margin-top: 1px;
   }
 
   /* Carta */
@@ -1750,22 +1840,43 @@ const synthesisStyles = `
 
     /* Timeline print */
     .timeline-container {
-      grid-template-columns: repeat(3, 1fr) !important;
       page-break-inside: avoid;
       break-inside: avoid;
     }
+    .timeline-progress-bar {
+      height: 24px !important; margin-bottom: 16px !important;
+      border-radius: 4px !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .timeline-progress-segment {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .timeline-progress-label { font-size: 9px !important; color: #fff !important; }
+    .timeline-phases { gap: 12px !important; }
     .timeline-block {
       border: 1px solid #ccc !important;
+      border-left: 4px solid var(--phase-color-print) !important;
+      border-radius: 6px !important;
       page-break-inside: avoid;
       break-inside: avoid;
     }
     .timeline-header {
-      padding: 10px 12px !important;
+      padding: 10px 14px !important;
+      background: #f5f5f5 !important;
     }
-    .timeline-range { font-size: 10px !important; }
-    .timeline-title { font-size: 11px !important; }
-    .timeline-items { background: #fafafa !important; padding: 10px 12px !important; }
+    .timeline-phase-icon { color: var(--phase-color-print) !important; }
+    .timeline-range { font-size: 10px !important; color: var(--phase-color-print) !important; }
+    .timeline-title { font-size: 11px !important; color: #1a1a2e !important; }
+    .timeline-items { padding: 10px 14px !important; gap: 8px !important; }
     .timeline-item { font-size: 11px !important; color: #333 !important; }
+    .timeline-item-num {
+      width: 18px !important; height: 18px !important;
+      font-size: 9px !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
 
     /* Carta print — diseño formal */
     .plan-section-carta {
@@ -1836,18 +1947,50 @@ const synthesisStyles = `
       orphans: 3;
       widows: 3;
     }
-    .plan-md-heading, .plan-md-heading-sm { color: #1a1a2e !important; }
+    .plan-md-heading {
+      color: #1a1a2e !important;
+      border-bottom: 1px solid #ddd !important;
+    }
+    .plan-md-heading-sm { color: #1a1a2e !important; }
 
-    /* Listas: conservar estilos normales, sin saltos de página por bullet */
+    /* Listas print */
     .plan-markdown-ul,
     .plan-markdown-ol {
       display: block !important;
-      padding-left: 1.4em !important;
+      padding-left: 0 !important;
       margin: 4px 0 !important;
+      list-style: none !important;
+    }
+    .plan-markdown-ol { counter-reset: plan-ol !important; }
+    .plan-markdown-ol > .plan-markdown-li {
+      counter-increment: plan-ol !important;
+      padding-left: 30px !important;
+      position: relative !important;
+    }
+    .plan-markdown-ol > .plan-markdown-li::before {
+      content: counter(plan-ol) !important;
+      position: absolute !important; left: 0 !important; top: 2px !important;
+      width: 20px !important; height: 20px !important; border-radius: 50% !important;
+      background: #1a1a2e !important; color: #fff !important;
+      font-size: 10px !important; font-weight: 700 !important;
+      display: flex !important; align-items: center !important; justify-content: center !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .plan-markdown-ul > .plan-markdown-li {
+      padding-left: 18px !important;
+      position: relative !important;
+    }
+    .plan-markdown-ul > .plan-markdown-li::before {
+      content: '' !important;
+      position: absolute !important; left: 2px !important; top: 7px !important;
+      width: 7px !important; height: 7px !important; border-radius: 50% !important;
+      background: #1a1a2e !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
     .plan-markdown-li {
-      display: list-item !important;
-      margin: 0.3em 0 !important;
+      margin: 0.4em 0 !important;
       page-break-before: auto !important;
       break-before: auto !important;
     }
