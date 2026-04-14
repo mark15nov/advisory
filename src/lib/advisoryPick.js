@@ -3,6 +3,75 @@
 export const ADVISORY_PICK_MIN = 1
 export const ADVISORY_PICK_MAX = 3
 
+function matchedItemsFromStringArray(arr, profileTokens, tokenize) {
+  if (!Array.isArray(arr)) return []
+  const seen = new Set()
+  const out = []
+  for (const item of arr) {
+    if (item == null) continue
+    const key = String(item).trim()
+    if (!key || seen.has(key)) continue
+    const toks = tokenize(key)
+    if (toks.some((t) => profileTokens.has(t))) {
+      seen.add(key)
+      out.push(key)
+    }
+  }
+  return out
+}
+
+/**
+ * Texto legible derivado de la misma heurística que fitScore (sin inventar datos).
+ */
+function buildFitSummary({
+  row,
+  industryScore,
+  specialtyScore,
+  locationScore,
+  catalogScore,
+  industryMatched,
+  specialtyMatched,
+}) {
+  const parts = []
+  if (industryMatched.length > 0) {
+    const shown = industryMatched.slice(0, 5)
+    const extra = industryMatched.length > 5 ? ' (y más)' : ''
+    parts.push(`Industrias del perfil que conectan con tu caso: ${shown.join(', ')}${extra}.`)
+  } else if (industryScore > 0) {
+    parts.push('Hay coincidencias de términos entre tu caso y las industrias registradas del advisor.')
+  }
+  if (specialtyMatched.length > 0) {
+    const shown = specialtyMatched.slice(0, 5)
+    const extra = specialtyMatched.length > 5 ? ' (y más)' : ''
+    parts.push(`Especialidades relevantes: ${shown.join(', ')}${extra}.`)
+  } else if (specialtyScore > 0) {
+    parts.push('Hay alineación entre el caso y las especialidades declaradas en el directorio.')
+  }
+  if (locationScore > 0 && String(row.ubicacion || '').trim()) {
+    parts.push(`Ubicación del perfil (${String(row.ubicacion).trim()}) coherente con palabras clave del caso.`)
+  }
+  const hasTopicFit = industryScore > 0 || specialtyScore > 0 || locationScore > 0
+  if (catalogScore > 0) {
+    if (!hasTopicFit) {
+      parts.push('El texto del caso y la descripción, productos o empresa del advisor comparten vocabulario en el directorio.')
+    } else {
+      parts.push('La descripción y datos del perfil refuerzan el encaje.')
+    }
+  }
+  const rating = Number(row.score || 0)
+  if (Number.isFinite(rating) && rating > 0) {
+    parts.push(`Valoración en directorio: ${rating}.`)
+  }
+  const exp = Number(row.experiencia_anios || 0)
+  if (Number.isFinite(exp) && exp >= 5) {
+    parts.push(`Experiencia declarada: ${exp} años.`)
+  }
+  if (parts.length === 0) {
+    return 'Incluido entre los mejores puntajes del directorio para tu caso; el encaje por texto es limitado, conviene revisarlo manualmente.'
+  }
+  return parts.join(' ')
+}
+
 /**
  * Ordena filas advisory por ajuste al perfil del caso (heurística por tokens).
  * @param {object[]} rows - Filas de public.advisory
@@ -47,16 +116,33 @@ export function scoreAdvisoryRows(rows, profile) {
       .join(' ')
     const catalogTokens = tokenize(catalogText)
 
-    const industryScore = countOverlap(industryTokens) * 4
-    const specialtyScore = countOverlap(specialtyTokens) * 3
-    const locationScore = countOverlap(locationTokens) * 2
-    const catalogScore = countOverlap(catalogTokens) * 2
+    const industryOverlap = countOverlap(industryTokens)
+    const specialtyOverlap = countOverlap(specialtyTokens)
+    const locationOverlap = countOverlap(locationTokens)
+    const catalogOverlap = countOverlap(catalogTokens)
+    const industryScore = industryOverlap * 4
+    const specialtyScore = specialtyOverlap * 3
+    const locationScore = locationOverlap * 2
+    const catalogScore = catalogOverlap * 2
     const ratingBoost = Number(row.score || 0)
     const experienceBoost = Math.min(Number(row.experiencia_anios || 0), 30) * 0.05
+
+    const industryMatched = matchedItemsFromStringArray(row.industrias, profileTokens, tokenize)
+    const specialtyMatched = matchedItemsFromStringArray(row.especialidades, profileTokens, tokenize)
+    const fitSummary = buildFitSummary({
+      row,
+      industryScore,
+      specialtyScore,
+      locationScore,
+      catalogScore,
+      industryMatched,
+      specialtyMatched,
+    })
 
     return {
       ...row,
       fitScore: industryScore + specialtyScore + locationScore + catalogScore + ratingBoost + experienceBoost,
+      fitSummary,
     }
   })
 
@@ -110,6 +196,7 @@ export function normalizeClientAdvisoryCandidates(arr) {
         score: Number.isFinite(Number(row.score))
           ? Number(row.score)
           : (Number.isFinite(Number(row.fitScore)) ? Number(row.fitScore) : undefined),
+        fitSummary: str(row.fitSummary, 1200),
         activo: true,
       }
     })
@@ -148,6 +235,7 @@ export function buildAdvisoryContext(candidates) {
     return [
       `${index + 1}. ${c.nombre}`,
       contact && `   - Contacto: ${contact}`,
+      c.fitSummary?.trim() && `   - Por qué encaja (directorio): ${String(c.fitSummary).trim()}`,
       `   - Especialidades: ${specialties || 'N/D'}`,
       `   - Industrias: ${industries || 'N/D'}`,
       `   - Ubicación: ${c.ubicacion || 'N/D'}`,
