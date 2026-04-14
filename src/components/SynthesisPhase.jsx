@@ -208,6 +208,18 @@ function stripRedundantCompanyHeadingMarkdown(markdown, company) {
   return rest.length ? rest : markdown
 }
 
+function buildAdvisorHelpFallback({ fitSummary, especialidad }) {
+  const fit = String(fitSummary || '').trim()
+  const specialty = String(especialidad || '').trim()
+  if (!fit && !specialty) return null
+
+  if (fit) {
+    // Reencuadra el resumen de encaje para responder "cómo ayuda" de forma práctica.
+    return `Puede ayudarte en este caso porque ${fit.charAt(0).toLowerCase()}${fit.slice(1)}`
+  }
+  return `Puede ayudarte en este caso desde su especialidad en ${specialty}.`
+}
+
 export default function SynthesisPhase({ session, questionHistory, experts, onDone, initialPlanOutput }) {
   const cachedPlanAtMount =
     typeof initialPlanOutput === 'string' && initialPlanOutput.trim() ? initialPlanOutput.trim() : ''
@@ -628,18 +640,12 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
 
     const scorecardEl = isScorecard ? renderScorecard(content) : null
     const timelineEl = isTimeline ? renderTimeline(content) : null
-    // Oculta el markdown de Claude en la sección de advisors siempre que el panel esté activo
-    // (loading, ok o empty) para evitar duplicar contenido debajo del panel del directorio.
-    const hideAdvisorsMarkdown =
-      isAdvisorsRecomendadosSection(title) &&
-      (directoryStatus === 'loading' || directoryStatus === 'ok' || directoryStatus === 'empty')
-
     return (
       <div className="plan-section-content">
         {isScorecard && (scorecardEl || renderMarkdownBody(content, stripCompanyHeading))}
         {isTimeline && (timelineEl || renderMarkdownBody(content, stripCompanyHeading))}
         {isCarta && renderMarkdownBody(content, stripCompanyHeading)}
-        {!isScorecard && !isTimeline && !isCarta && !hideAdvisorsMarkdown &&
+        {!isScorecard && !isTimeline && !isCarta &&
           renderMarkdownBody(content, stripCompanyHeading)}
       </div>
     )
@@ -760,7 +766,12 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
             let rank = 0
             return directoryAdvisors.map((a) => {
               const aiEntry = findAiEntry(a.nombre)
-              const justification = aiEntry?.justificacion?.trim() || aiEntry?.especialidad?.trim() || a.fitSummary?.trim() || null
+              const justification =
+                aiEntry?.justificacion?.trim() ||
+                buildAdvisorHelpFallback({
+                  fitSummary: a.fitSummary,
+                  especialidad: aiEntry?.especialidad,
+                })
               if (!justification) return null
               rank += 1
               const desc = (a.bio || a.productos_servicios || '').trim()
@@ -802,10 +813,8 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
                         <p className="directory-advisor-desc">{desc.length > 300 ? desc.slice(0, 300) + '…' : desc}</p>
                       </div>
                     )}
-                    <div className="directory-advisor-justification">
-                      <span className="directory-advisor-why-label">Justificación</span>
-                      <p className="directory-advisor-why">{justification}</p>
-                    </div>
+                    {/* La justificación extensa se muestra en el bloque markdown de la sección,
+                        para evitar duplicar texto dentro de la tarjeta del directorio. */}
                   </div>
                 </li>
               )
