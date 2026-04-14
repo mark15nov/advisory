@@ -104,6 +104,7 @@ app.post('/api/advisory-recommendations', requireSupabaseAuth, async (req, res) 
       industrias: c.industrias,
       ubicacion: c.ubicacion,
       fitScore: c.fitScore,
+      fitSummary: c.fitSummary,
     }))
     res.json({ candidates: sanitized })
   } catch (err) {

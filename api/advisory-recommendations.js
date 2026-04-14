@@ -65,6 +65,7 @@ export default async function handler(req, res) {
       industrias: c.industrias,
       ubicacion: c.ubicacion,
       fitScore: c.fitScore,
+      fitSummary: c.fitSummary,
     }))
     return res.status(200).json({ candidates: sanitized })
   } catch (err) {

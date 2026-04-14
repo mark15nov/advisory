@@ -200,12 +200,14 @@ export default function SetupPhase({ onStart, initialData, timerRunning, onStart
             onChange={e => setDifferentiation(e.target.value)}
             rows={3}
           />
-          <span style={styles.counter}>{differentiation.length}/100 mínimo</span>
-          {differentiation.trim().length > 0 && differentiation.trim().length < 100 && (
-            <span style={{ ...styles.counter, color: '#b45309' }}>
-              Faltan {100 - differentiation.trim().length} caracteres para el mínimo.
-            </span>
-          )}
+          <div style={styles.counterBlock}>
+            <span style={styles.counter}>{differentiation.length}/100 mínimo</span>
+            {differentiation.trim().length > 0 && differentiation.trim().length < 100 && (
+              <span style={{ ...styles.counter, color: '#b45309' }}>
+                Faltan {100 - differentiation.trim().length} caracteres para el mínimo.
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Sección: Problema */}
@@ -219,12 +221,14 @@ export default function SetupPhase({ onStart, initialData, timerRunning, onStart
             onChange={e => setCaseText(e.target.value)}
             rows={7}
           />
-          <span style={styles.counter}>{caseText.length} caracteres (mínimo 200)</span>
-          {caseText.trim().length > 0 && caseText.trim().length < 200 && (
-            <span style={{ ...styles.counter, color: '#b45309' }}>
-              Faltan {200 - caseText.trim().length} caracteres para el mínimo.
-            </span>
-          )}
+          <div style={styles.counterBlock}>
+            <span style={styles.counter}>{caseText.length} caracteres (mínimo 200)</span>
+            {caseText.trim().length > 0 && caseText.trim().length < 200 && (
+              <span style={{ ...styles.counter, color: '#b45309' }}>
+                Faltan {200 - caseText.trim().length} caracteres para el mínimo.
+              </span>
+            )}
+          </div>
         </div>
 
         <button
@@ -334,13 +338,18 @@ const styles = {
     resize: 'none',
     lineHeight: 1.6,
   },
+  counterBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 4,
+    marginTop: 4,
+  },
   counter: {
     fontSize: 11,
     color: 'var(--text-dim)',
     textAlign: 'right',
-    position: 'absolute',
-    bottom: -20,
-    right: 0,
+    lineHeight: 1.35,
   },
   btn: {
     display: 'flex',

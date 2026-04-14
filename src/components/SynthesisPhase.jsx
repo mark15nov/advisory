@@ -494,13 +494,18 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
 
     const scorecardEl = isScorecard ? renderScorecard(content) : null
     const timelineEl = isTimeline ? renderTimeline(content) : null
+    const hideAdvisorsMarkdown =
+      isAdvisorsRecomendadosSection(title) &&
+      (directoryStatus === 'loading' ||
+        (directoryStatus === 'ok' && directoryAdvisors.length > 0))
 
     return (
       <div className="plan-section-content">
         {isScorecard && (scorecardEl || renderMarkdownBody(content, stripCompanyHeading))}
         {isTimeline && (timelineEl || renderMarkdownBody(content, stripCompanyHeading))}
         {isCarta && renderMarkdownBody(content, stripCompanyHeading)}
-        {!isScorecard && !isTimeline && !isCarta && renderMarkdownBody(content, stripCompanyHeading)}
+        {!isScorecard && !isTimeline && !isCarta && !hideAdvisorsMarkdown &&
+          renderMarkdownBody(content, stripCompanyHeading)}
       </div>
     )
   }
@@ -603,13 +608,8 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
                     )}
                   </div>
                 )}
-                {(a.bio || a.productos_servicios) && (
-                  <div className="directory-advisor-bio">
-                    {(() => {
-                      const t = (a.bio || a.productos_servicios || '').trim()
-                      return t.length > 240 ? `${t.slice(0, 240)}…` : t
-                    })()}
-                  </div>
+                {a.fitSummary?.trim() && (
+                  <p className="directory-advisor-why">{a.fitSummary.trim()}</p>
                 )}
               </div>
             </li>
@@ -681,6 +681,13 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
       <div className="print-cover">
         <div className="cover-top-bar" />
         <div className="cover-body">
+          <div className="cover-logo-wrap">
+            <img
+              src="/assets/logo.jpeg"
+              alt="Advisory Business Boards"
+              className="cover-logo"
+            />
+          </div>
           <div className="cover-badge">CONSILIUM</div>
           <h1 className="cover-title">Plan de Acción<br/>Ejecutivo</h1>
           <div className="cover-divider" />
@@ -714,6 +721,11 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
       {/* Print content (all sections, hidden on screen) */}
       <div className="print-all-sections">
         <div className="print-page-header">
+          <img
+            src="/assets/logo.jpeg"
+            alt=""
+            className="pph-logo"
+          />
           <span className="pph-brand">Advisory Business Boards</span>
           <span className="pph-sep">·</span>
           <span className="pph-company">{session.company || session.presenter}</span>
@@ -996,7 +1008,7 @@ const synthesisStyles = `
     font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px;
   }
   .directory-advisor-contact {
-    font-size: 12px; color: var(--text-muted); word-break: break-word; margin-bottom: 6px;
+    font-size: 12px; color: var(--text-muted); word-break: break-word;
   }
   .directory-advisor-link {
     color: var(--accent); text-decoration: none;
@@ -1004,8 +1016,11 @@ const synthesisStyles = `
   .directory-advisor-link:hover {
     text-decoration: underline;
   }
-  .directory-advisor-bio {
-    font-size: 12px; color: var(--text-dim); line-height: 1.5;
+  .directory-advisor-why {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin: 8px 0 0 0;
   }
 
   .slide-counter {
@@ -1304,7 +1319,7 @@ const synthesisStyles = `
       background: #f0f7ff !important;
     }
     .print-all-sections .directory-advisor-nombre { color: #1a1a2e !important; }
-    .print-all-sections .directory-advisor-bio { color: #555 !important; }
+    .print-all-sections .directory-advisor-why { color: #555 !important; }
 
     /* ---- COVER PAGE ---- */
     .print-cover {
@@ -1331,6 +1346,24 @@ const synthesisStyles = `
       flex-direction: column;
       justify-content: center;
       padding: 44px 56px;
+    }
+    .cover-logo-wrap {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff !important;
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 22px;
+      align-self: flex-start;
+    }
+    .cover-logo {
+      display: block;
+      max-height: 52px;
+      max-width: 240px;
+      width: auto;
+      height: auto;
+      object-fit: contain;
     }
     .cover-badge {
       font-size: 12px; font-weight: 700; letter-spacing: 0.25em;
@@ -1367,10 +1400,19 @@ const synthesisStyles = `
     /* ---- CONTENT PAGES ---- */
     .print-page-header {
       display: flex !important;
+      flex-wrap: wrap;
       align-items: center; gap: 8px;
       padding-bottom: 16px; margin-bottom: 28px;
       border-bottom: 2px solid #1a1a2e;
       font-size: 10px; letter-spacing: 0.06em; color: #888 !important;
+    }
+    .pph-logo {
+      height: 30px;
+      width: auto;
+      max-width: 160px;
+      object-fit: contain;
+      flex-shrink: 0;
+      margin-right: 4px;
     }
     .pph-brand { font-weight: 700; color: #1a1a2e !important; }
     .pph-sep { color: #ccc !important; }

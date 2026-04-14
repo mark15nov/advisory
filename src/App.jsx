@@ -17,6 +17,7 @@ const TIMER_PAUSED_KEY = 'advisory-timer-paused'
 const TIMER_ELAPSED_KEY = 'advisory-timer-elapsed'
 const TIMER_DURATION = 90 * 60
 const BRAND_LOGO_SRC = '/assets/logo.jpeg'
+const AXON_LOGO_SRC = '/assets/vfAsset.png'
 
 function loadSaved() {
   try {
@@ -128,6 +129,15 @@ function SessionTimer({ startTime, paused, elapsedWhenPaused, onTogglePause }) {
         {paused ? <Play size={14} /> : <Pause size={14} />}
       </button>
     </div>
+  )
+}
+
+function DevFooter() {
+  return (
+    <footer style={styles.devFooter}>
+      <span style={styles.devFooterText}>Desarrollado por axon by profit120</span>
+      <img src={AXON_LOGO_SRC} alt="Axon" style={styles.devFooterLogo} />
+    </footer>
   )
 }
 
@@ -310,6 +320,7 @@ export default function App() {
             onViewSession={loadSession}
           />
         </main>
+        <DevFooter />
       </div>
     )
   }
@@ -458,6 +469,7 @@ export default function App() {
           />
         )}
       </main>
+      <DevFooter />
     </div>
   )
 }
@@ -537,5 +549,27 @@ const styles = {
     cursor: 'pointer',
   },
   main: { flex: 1, overflowY: 'auto' },
+  devFooter: {
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    padding: '10px 16px',
+    borderTop: '1px solid var(--border)',
+    background: 'var(--surface)',
+  },
+  devFooterText: {
+    fontSize: 11,
+    letterSpacing: '0.04em',
+    color: 'var(--text-dim)',
+  },
+  devFooterLogo: {
+    height: 22,
+    width: 'auto',
+    maxWidth: 120,
+    objectFit: 'contain',
+    display: 'block',
+  },
 }
 
