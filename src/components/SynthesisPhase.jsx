@@ -150,15 +150,35 @@ function parseAdvisorsFromMarkdown(content) {
     const allLines = [block.header, ...block.subLines].map((l) =>
       l.replace(/^[\s\-*•]+/, '').trim()
     )
+    // Acumula líneas de justificación (puede ser multi-línea)
+    const justLines = []
+    let inJust = false
     for (const l of allLines) {
       if (/especialidad\s+clave\s*:/i.test(l)) {
+        inJust = false
         especialidad = l.replace(/especialidad\s+clave\s*:\s*/i, '').replace(/\*\*/g, '').trim()
       } else if (/justificaci[oó]n\s*:/i.test(l)) {
-        justificacion = l.replace(/justificaci[oó]n\s*:\s*/i, '').replace(/\*\*/g, '').trim()
+        inJust = true
+        const first = l.replace(/justificaci[oó]n\s*:\s*/i, '').replace(/\*\*/g, '').trim()
+        if (first) justLines.push(first)
       } else if (!ajuste && /ajuste\s*[:.]?\s*(alto|medio)/i.test(l)) {
+        inJust = false
         const am = l.match(/ajuste\s*[:.]?\s*(alto|medio)/i)
         if (am) ajuste = am[1].toUpperCase()
+      } else if (inJust && l) {
+        // continúa acumulando líneas del bloque de justificación
+        justLines.push(l.replace(/\*\*/g, '').trim())
       }
+    }
+    justificacion = justLines.join(' ').trim()
+
+    // Si no se encontró una justificación etiquetada, usar todo el contenido de sub-líneas
+    if (!justificacion && block.subLines.length > 0) {
+      justificacion = block.subLines
+        .map((l) => l.replace(/^[\s\-*•◦]+/, '').replace(/\*\*/g, '').trim())
+        .filter((l) => l && !/^ajuste\s*[:.]?\s*(alto|medio)/i.test(l) && !/^especialidad\s+clave\s*:/i.test(l))
+        .join(' ')
+        .trim()
     }
 
     if (nombre) {
@@ -608,10 +628,11 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
 
     const scorecardEl = isScorecard ? renderScorecard(content) : null
     const timelineEl = isTimeline ? renderTimeline(content) : null
+    // Oculta el markdown de Claude en la sección de advisors siempre que el panel esté activo
+    // (loading, ok o empty) para evitar duplicar contenido debajo del panel del directorio.
     const hideAdvisorsMarkdown =
       isAdvisorsRecomendadosSection(title) &&
-      (directoryStatus === 'loading' ||
-        (directoryStatus === 'ok' && directoryAdvisors.length > 0))
+      (directoryStatus === 'loading' || directoryStatus === 'ok' || directoryStatus === 'empty')
 
     return (
       <div className="plan-section-content">
@@ -679,6 +700,26 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
         .replace(/\s+/g, ' ')
         .trim()
 
+    // Fuzzy match: busca la entrada de aiAdvisors con más tokens en común con el nombre del DB.
+    // Requiere al menos 1 token de 4+ letras en común para evitar falsos positivos.
+    const findAiEntry = (dbName) => {
+      const exact = aiAdvisors[normAdvisorName(dbName)]
+      if (exact) return exact
+      const dbTokens = normAdvisorName(dbName).split(' ').filter((t) => t.length >= 4)
+      if (dbTokens.length === 0) return undefined
+      let bestEntry = undefined
+      let bestScore = 0
+      for (const [key, entry] of Object.entries(aiAdvisors)) {
+        const keyTokens = new Set(key.split(' '))
+        const matches = dbTokens.filter((t) => keyTokens.has(t)).length
+        if (matches > bestScore) {
+          bestScore = matches
+          bestEntry = entry
+        }
+      }
+      return bestScore >= 1 ? bestEntry : undefined
+    }
+
     if (directoryStatus === 'loading') {
       return wrap(
         <div className="directory-advisors-loading">
@@ -718,7 +759,7 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
           {(() => {
             let rank = 0
             return directoryAdvisors.map((a) => {
-              const aiEntry = aiAdvisors[normAdvisorName(a.nombre)]
+              const aiEntry = findAiEntry(a.nombre)
               const justification = aiEntry?.justificacion?.trim() || aiEntry?.especialidad?.trim() || a.fitSummary?.trim() || null
               if (!justification) return null
               rank += 1
