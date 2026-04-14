@@ -525,6 +525,27 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
     // causaría parpadeo por reordenamientos continuos con key={sec.title}.
     if (done) {
       cleaned.sort((a, b) => canonicalIndex(a.title) - canonicalIndex(b.title))
+
+      // Fusionar secciones duplicadas que mapean al mismo índice canónico
+      const merged = []
+      for (const sec of cleaned) {
+        const ci = canonicalIndex(sec.title)
+        const prev = merged.length > 0 ? merged[merged.length - 1] : null
+        if (prev && canonicalIndex(prev.title) === ci) {
+          // Fusionar contenido, quedarnos con el título más corto (canónico)
+          const prevContent = (prev.content || '').trim()
+          const secContent = (sec.content || '').trim()
+          prev.content = [prevContent, secContent].filter(Boolean).join('\n\n')
+          if (sec.title.length < prev.title.length) prev.title = sec.title
+        } else {
+          merged.push({ ...sec })
+        }
+      }
+      return merged.map((s, i) => ({
+        ...s,
+        num: s.num ?? String(i + 1).padStart(2, '0'),
+        index: i,
+      }))
     }
 
     // Asignar número de sección según posición final
@@ -671,80 +692,61 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
           <p className="directory-advisors-sub">Hasta 3 perfiles del directorio, ordenados por ajuste al caso.</p>
         </div>
         <ol className="directory-advisors-list">
-          {directoryAdvisors.map((a, i) => {
-            const aiEntry = aiAdvisors[normAdvisorName(a.nombre)]
-            const justification = (() => {
-              // 1. Justificación contextualizada al caso generada por el modelo
-              if (aiEntry?.justificacion?.trim()) return aiEntry.justificacion.trim()
-              // 2. fitSummary (score de encaje por tokens)
-              if (a.fitSummary?.trim()) return a.fitSummary.trim()
-              // 3. Especialidades / industrias del directorio
-              const parts = []
-              if (Array.isArray(a.especialidades) && a.especialidades.length > 0)
-                parts.push(`Especialidades: ${a.especialidades.slice(0, 4).join(', ')}.`)
-              if (Array.isArray(a.industrias) && a.industrias.length > 0)
-                parts.push(`Industrias: ${a.industrias.slice(0, 3).join(', ')}.`)
-              if (parts.length > 0) return parts.join(' ')
-              if (a.bio?.trim()) {
-                const b = a.bio.trim()
-                return b.length > 220 ? b.slice(0, 220) + '…' : b
-              }
-              if (a.productos_servicios?.trim()) {
-                const p = a.productos_servicios.trim()
-                return p.length > 220 ? p.slice(0, 220) + '…' : p
-              }
-              return 'Perfil seleccionado entre los mejores del directorio por ajuste al caso.'
-            })()
-            return (
-              <li key={a.id || `adv-${i}`} className="directory-advisors-item">
-                <span className="directory-advisor-rank">{i + 1}</span>
-                <div className="directory-advisor-body">
-                  <div className="directory-advisor-nombre">{a.nombre}</div>
-                  {(a.empresa || a.email || a.web) && (
-                    <div className="directory-advisor-contact">
-                      {a.empresa && <span>{a.empresa}</span>}
-                      {a.empresa && (a.email || a.web) && <span> · </span>}
-                      {a.email && (
-                        <a href={`mailto:${a.email}`} className="directory-advisor-link">{a.email}</a>
-                      )}
-                      {a.email && a.web && <span> · </span>}
-                      {a.web && (
-                        <a href={a.web.startsWith('http') ? a.web : `https://${a.web}`} target="_blank" rel="noopener noreferrer" className="directory-advisor-link">
-                          {a.web}
-                        </a>
-                      )}
-                    </div>
-                  )}
-                  {(aiEntry?.ajuste || aiEntry?.especialidad) && (
-                    <div className="directory-advisor-meta">
-                      {aiEntry.ajuste && (
-                        <span className={`directory-advisor-ajuste directory-advisor-ajuste-${aiEntry.ajuste.toLowerCase()}`}>
-                          Ajuste: {aiEntry.ajuste}
-                        </span>
-                      )}
-                      {aiEntry.especialidad && (
-                        <span className="directory-advisor-especialidad">{aiEntry.especialidad}</span>
-                      )}
-                    </div>
-                  )}
-                  {(() => {
-                    const desc = (a.bio || a.productos_servicios || '').trim()
-                    if (!desc) return null
-                    return (
+          {(() => {
+            let rank = 0
+            return directoryAdvisors.map((a) => {
+              const aiEntry = aiAdvisors[normAdvisorName(a.nombre)]
+              const justification = aiEntry?.justificacion?.trim() || null
+              if (!justification) return null
+              rank += 1
+              const desc = (a.bio || a.productos_servicios || '').trim()
+              return (
+                <li key={a.id || `adv-${rank}`} className="directory-advisors-item">
+                  <span className="directory-advisor-rank">{rank}</span>
+                  <div className="directory-advisor-body">
+                    <div className="directory-advisor-nombre">{a.nombre}</div>
+                    {(a.empresa || a.email || a.web) && (
+                      <div className="directory-advisor-contact">
+                        {a.empresa && <span>{a.empresa}</span>}
+                        {a.empresa && (a.email || a.web) && <span> · </span>}
+                        {a.email && (
+                          <a href={`mailto:${a.email}`} className="directory-advisor-link">{a.email}</a>
+                        )}
+                        {a.email && a.web && <span> · </span>}
+                        {a.web && (
+                          <a href={a.web.startsWith('http') ? a.web : `https://${a.web}`} target="_blank" rel="noopener noreferrer" className="directory-advisor-link">
+                            {a.web}
+                          </a>
+                        )}
+                      </div>
+                    )}
+                    {(aiEntry?.ajuste || aiEntry?.especialidad) && (
+                      <div className="directory-advisor-meta">
+                        {aiEntry.ajuste && (
+                          <span className={`directory-advisor-ajuste directory-advisor-ajuste-${aiEntry.ajuste.toLowerCase()}`}>
+                            Ajuste: {aiEntry.ajuste}
+                          </span>
+                        )}
+                        {aiEntry.especialidad && (
+                          <span className="directory-advisor-especialidad">{aiEntry.especialidad}</span>
+                        )}
+                      </div>
+                    )}
+                    {desc && (
                       <div className="directory-advisor-description">
                         <span className="directory-advisor-desc-label">Descripción</span>
                         <p className="directory-advisor-desc">{desc.length > 300 ? desc.slice(0, 300) + '…' : desc}</p>
                       </div>
-                    )
-                  })()}
-                  <div className="directory-advisor-justification">
-                    <span className="directory-advisor-why-label">Justificación</span>
-                    <p className="directory-advisor-why">{justification}</p>
+                    )}
+                    <div className="directory-advisor-justification">
+                      <span className="directory-advisor-why-label">Justificación</span>
+                      <p className="directory-advisor-why">{justification}</p>
+                    </div>
                   </div>
-                </div>
-              </li>
-            )
-          })}
+                </li>
+              )
+            })
+          })()}
         </ol>
       </>
     )
@@ -1623,9 +1625,9 @@ const synthesisStyles = `
       page-break-before: always;
       break-before: page;
     }
-    .print-all-sections .plan-section:first-of-type {
-      page-break-before: avoid;
-      break-before: avoid;
+    .print-page-header + .plan-section {
+      page-break-before: avoid !important;
+      break-before: avoid !important;
     }
     .plan-section:last-child {
       border-bottom: none !important;
