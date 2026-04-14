@@ -719,7 +719,7 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
             let rank = 0
             return directoryAdvisors.map((a) => {
               const aiEntry = aiAdvisors[normAdvisorName(a.nombre)]
-              const justification = aiEntry?.justificacion?.trim() || aiEntry?.especialidad?.trim() || null
+              const justification = aiEntry?.justificacion?.trim() || aiEntry?.especialidad?.trim() || a.fitSummary?.trim() || null
               if (!justification) return null
               rank += 1
               const desc = (a.bio || a.productos_servicios || '').trim()
