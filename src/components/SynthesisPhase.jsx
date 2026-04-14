@@ -518,23 +518,8 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
       num: sectionNumForTitle(b.title),
     }))
 
-    // Filtra una "Introducción" espuria cuando el modelo deja un encabezado suelto
-    // tipo "PLAN DE ACCIÓN EJECUTIVO — <empresa>" fuera de secciones canónicas.
-    const cleaned = mapped.filter((s) => {
-      if (normalizeTitle(s.title) !== 'INTRODUCCION') return true
-      const content = (s.content || '').trim()
-      if (!content) return false
-
-      const lines = content
-        .split('\n')
-        .map((l) => l.trim())
-        .filter(Boolean)
-
-      if (lines.length !== 1) return true
-      const onlyLine = normalizeTitle(lines[0])
-      if (/^PLAN DE ACCION EJECUTIVO(\s*[-:]\s*.+)?$/.test(onlyLine)) return false
-      return true
-    })
+    // Filtra cualquier sección "Introducción" — no es un módulo canónico válido.
+    const cleaned = mapped.filter((s) => normalizeTitle(s.title) !== 'INTRODUCCION')
 
     // Solo ordenar cuando el streaming terminó; durante streaming el sort
     // causaría parpadeo por reordenamientos continuos con key={sec.title}.
@@ -742,6 +727,16 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
                       )}
                     </div>
                   )}
+                  {(() => {
+                    const desc = (a.bio || a.productos_servicios || '').trim()
+                    if (!desc) return null
+                    return (
+                      <div className="directory-advisor-description">
+                        <span className="directory-advisor-desc-label">Descripción</span>
+                        <p className="directory-advisor-desc">{desc.length > 300 ? desc.slice(0, 300) + '…' : desc}</p>
+                      </div>
+                    )
+                  })()}
                   <div className="directory-advisor-justification">
                     <span className="directory-advisor-why-label">Justificación</span>
                     <p className="directory-advisor-why">{justification}</p>
@@ -1168,6 +1163,25 @@ const synthesisStyles = `
   .directory-advisor-especialidad {
     font-size: 12px; color: var(--text-muted); font-style: italic;
   }
+  .directory-advisor-description {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .directory-advisor-desc-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .directory-advisor-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin: 0;
+  }
   .directory-advisor-justification {
     margin-top: 8px;
     display: flex;
@@ -1419,8 +1433,18 @@ const synthesisStyles = `
 
   /* Carta */
   .plan-section-carta {
-    background: var(--gold-dim) !important;
-    border-color: var(--gold) !important;
+    background: linear-gradient(135deg, #fafafa 0%, #f5f0eb 100%) !important;
+    border: 2px solid #1a1a2e !important;
+    border-radius: 4px !important;
+    position: relative;
+  }
+  .plan-section-carta::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #1a1a2e, #c62828, #1a1a2e);
+    border-radius: 4px 4px 0 0;
   }
   .carta-container { padding: 8px 0; }
   .carta-text {
@@ -1482,6 +1506,8 @@ const synthesisStyles = `
       background: #f0f7ff !important;
     }
     .print-all-sections .directory-advisor-nombre { color: #1a1a2e !important; }
+    .print-all-sections .directory-advisor-desc-label { color: #666 !important; }
+    .print-all-sections .directory-advisor-desc { color: #555 !important; }
     .print-all-sections .directory-advisor-why-label { color: #666 !important; }
     .print-all-sections .directory-advisor-why { color: #555 !important; }
 
@@ -1598,8 +1624,8 @@ const synthesisStyles = `
       break-before: page;
     }
     .print-all-sections .plan-section:first-of-type {
-      page-break-before: auto;
-      break-before: auto;
+      page-break-before: avoid;
+      break-before: avoid;
     }
     .plan-section:last-child {
       border-bottom: none !important;
@@ -1739,17 +1765,62 @@ const synthesisStyles = `
     .timeline-items { background: #fafafa !important; padding: 10px 12px !important; }
     .timeline-item { font-size: 11px !important; color: #333 !important; }
 
-    /* Carta print */
+    /* Carta print — diseño formal */
     .plan-section-carta {
-      background: #fdf2f2 !important;
-      border: 1px solid var(--red) !important;
-      border-left: 4px solid var(--red) !important;
+      background: #fff !important;
+      border: 2px solid #1a1a2e !important;
+      border-radius: 0 !important;
+      padding: 40px 48px !important;
+      margin-top: 20px !important;
       page-break-before: always !important;
       break-before: page !important;
+      position: relative;
     }
-    .carta-text {
-      color: #333 !important; font-size: 12px !important;
-      line-height: 1.7 !important;
+    .plan-section-carta::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 6px;
+      border-radius: 0;
+      background: linear-gradient(90deg, #1a1a2e 0%, #c62828 50%, #1a1a2e 100%);
+    }
+    .plan-section-carta::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 6px;
+      border-radius: 0;
+      background: linear-gradient(90deg, #1a1a2e 0%, #c62828 50%, #1a1a2e 100%);
+    }
+    .plan-section-carta .plan-section-header {
+      text-align: center !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      border-bottom: 1px solid #ccc !important;
+      padding-bottom: 16px !important;
+      margin-bottom: 20px !important;
+    }
+    .plan-section-carta .plan-section-num {
+      background: #c62828 !important;
+      width: 36px !important; height: 36px !important;
+      font-size: 14px !important;
+      margin-bottom: 8px !important;
+    }
+    .plan-section-carta .plan-section-title {
+      font-size: 22px !important;
+      letter-spacing: 0.12em !important;
+      text-transform: uppercase !important;
+      color: #1a1a2e !important;
+    }
+    .plan-section-carta .plan-markdown .plan-markdown-p,
+    .plan-section-carta .plan-markdown .plan-para,
+    .plan-section-carta .carta-text {
+      color: #222 !important;
+      font-size: 12pt !important;
+      line-height: 1.9 !important;
+      font-style: italic;
+      text-align: justify !important;
     }
 
     .plan-markdown .plan-para,
