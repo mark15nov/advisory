@@ -159,6 +159,12 @@ Para cada advisor recomendado, incluye exactamente:
 3. Especialidad clave
 4. Justificación breve (1-2 oraciones concretas explicando POR QUÉ este advisor le aporta valor al presentador. Si puede ejecutar un punto del plan de 90 días, menciónalo explícitamente. Debe ser específica al caso, nunca genérica)
 
+FORMATO OBLIGATORIO DE LA JUSTIFICACIÓN (NO GENÉRICA):
+- Debe responder explícitamente: "¿Cómo puede ayudar este advisor a ESTE caso?".
+- Incluye al menos 1 acción o resultado concreto (ejemplo: abrir canal comercial, mejorar margen, reducir costo, acelerar implementación, validar mercado, profesionalizar operación).
+- Si existe vínculo con una acción de la hoja de ruta de 90 días, dilo textualmente con una frase de ejecución ("puede ejecutar", "puede implementar", "puede acelerar").
+- Evita frases vacías como "hace buen match", "encaja por industria" o "podría aportar valor" sin explicar el cómo.
+
 ## CARTA DEL CONSEJO
 Escribe un párrafo corto (4-5 oraciones) dirigido directamente al presentador, en primera persona del plural ("nosotros, el consejo"). Tono cercano, motivacional pero realista. Reconoce su valentía al presentar el caso, destaca la fortaleza principal que viste, y cierra con una frase de confianza en su capacidad de ejecutar el plan. Firma como "El Consejo — Advisory Business Boards".`
 }
