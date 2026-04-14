@@ -135,8 +135,9 @@ function SessionTimer({ startTime, paused, elapsedWhenPaused, onTogglePause }) {
 function DevFooter() {
   return (
     <footer style={styles.devFooter}>
-      <span style={styles.devFooterText}>Desarrollado por Axon by Profit120 · v1.0</span>
+      <span style={styles.devFooterText}>Desarrollado por Axon by Profit120</span>
       <img src={AXON_LOGO_SRC} alt="Axon" style={styles.devFooterLogo} />
+      <span style={styles.devFooterText}>v1.0</span>
     </footer>
   )
 }

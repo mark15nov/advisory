@@ -712,14 +712,14 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
         <div className="directory-advisors-top">
           <span className="directory-advisors-badge"><Users size={13} /> Directorio</span>
           <h4 className="directory-advisors-title">Advisors sugeridos para este caso</h4>
-          <p className="directory-advisors-sub">Hasta 3 perfiles del directorio, ordenados por ajuste al caso.</p>
+          <p className="directory-advisors-sub">Perfiles del directorio recomendados para networking y asesoría.</p>
         </div>
         <ol className="directory-advisors-list">
           {(() => {
             let rank = 0
             return directoryAdvisors.map((a) => {
               const aiEntry = aiAdvisors[normAdvisorName(a.nombre)]
-              const justification = aiEntry?.justificacion?.trim() || null
+              const justification = aiEntry?.justificacion?.trim() || aiEntry?.especialidad?.trim() || null
               if (!justification) return null
               rank += 1
               const desc = (a.bio || a.productos_servicios || '').trim()
