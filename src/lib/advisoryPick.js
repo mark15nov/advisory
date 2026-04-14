@@ -217,10 +217,11 @@ export function buildAdvisoryContext(candidates) {
   const intro = [
     `CANDIDATOS ADVISORY DESDE BASE DE DATOS (${n} preseleccionado${n > 1 ? 's' : ''} por ajuste al caso):`,
     `INSTRUCCIÓN OBLIGATORIA para "## ADVISORS RECOMENDADOS":`,
-    `- Recomienda como mínimo ${ADVISORY_PICK_MIN} y como máximo ${n} nombre(s) de la lista siguiente (nunca más de ${ADVISORY_PICK_MAX}).`,
+    `- SIEMPRE recomienda los ${n} candidato(s) listados abajo (máximo ${ADVISORY_PICK_MAX}). El objetivo es generar networking entre el presentador y los advisors.`,
     '- Usa solo nombres que aparezcan abajo; no inventes personas.',
     '- Ordena del mejor al peor ajuste al caso.',
-    '- Si solo uno encaja claramente, recomienda uno; si varios encajan, hasta tres en total.',
+    '- Busca conexiones amplias: industria, servicios complementarios, experiencia en problemas similares, capacidad de consejería, o sinergia profesional.',
+    '- SIEMPRE incluye una justificación específica al caso para cada advisor. Nunca dejes a un advisor sin justificación.',
     '',
   ].join('\n')
 

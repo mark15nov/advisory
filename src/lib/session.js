@@ -144,15 +144,20 @@ REGLA ANTI-CONTRADICCIÓN (OBLIGATORIA):
 - Si el bloque dice explícitamente "Sin candidatos disponibles" (y no lista personas), entonces escribe únicamente: "Sin candidatos disponibles en la base de datos para este caso." y no enumeres a nadie ni hables de "candidatos preseleccionados" tomados del consejo.
 
 Si recibes el bloque "CANDIDATOS ADVISORY DESDE BASE DE DATOS" con al menos una persona:
-- Recomienda como mínimo 1 y como máximo 3 nombres (nunca más de 3).
+- SIEMPRE recomienda 3 advisors si hay 3 o más candidatos en el bloque. Si solo hay 2, recomienda 2. Si solo hay 1, recomienda 1.
 - Solo puedes elegir nombres que aparezcan en ese bloque; no inventes advisors.
-- Si el bloque trae 1 candidato, recomienda 1. Si trae 2 o 3, puedes recomendar 1, 2 o 3 según relevancia, siempre dentro del límite de 3.
-- Ordena del mejor al peor ajuste al caso.
+
+CRITERIO DE SELECCIÓN Y ORDEN (por prioridad):
+1. PRIMERO busca advisors que puedan HACER NEGOCIO directamente con el presentador o EJECUTAR algún punto del plan de 90 días. Revisa la hoja de ruta que acabas de generar y cruza cada acción con los servicios, productos y especialidades de los candidatos. Si un advisor puede implementar, proveer o acelerar alguna de esas acciones, ese advisor va primero.
+2. SEGUNDO, si no hay match directo de negocio, busca advisors en la misma industria o con experiencia resolviendo problemas similares que puedan dar consejería estratégica.
+3. TERCERO, busca sinergias de networking: servicios complementarios, contactos en el mismo mercado, o cualquier conexión profesional que genere valor mutuo.
+- Incluso si un advisor no es especialista exacto en el problema, puede aportar valor como consejero, mentor, contacto comercial, o aliado estratégico.
+
 Para cada advisor recomendado, incluye exactamente:
 1. Nombre del advisor (exactamente como en la lista)
 2. Ajuste (ALTO/MEDIO)
 3. Especialidad clave
-4. Justificación breve (1 oración concreta enfocada en el problema del caso)
+4. Justificación breve (1-2 oraciones concretas explicando POR QUÉ este advisor le aporta valor al presentador. Si puede ejecutar un punto del plan de 90 días, menciónalo explícitamente. Debe ser específica al caso, nunca genérica)
 
 ## CARTA DEL CONSEJO
 Escribe un párrafo corto (4-5 oraciones) dirigido directamente al presentador, en primera persona del plural ("nosotros, el consejo"). Tono cercano, motivacional pero realista. Reconoce su valentía al presentar el caso, destaca la fortaleza principal que viste, y cierra con una frase de confianza en su capacidad de ejecutar el plan. Firma como "El Consejo — Advisory Business Boards".`

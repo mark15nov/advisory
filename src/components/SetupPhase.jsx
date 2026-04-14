@@ -81,12 +81,6 @@ export default function SetupPhase({ onStart, initialData, timerRunning, onStart
         </div>
       )}
 
-      {IS_DEV && (
-        <button type="button" style={styles.devAutofillBtn} onClick={applyDevAutofill}>
-          <Wand2 size={15} />
-          Autollenar caso (solo desarrollo)
-        </button>
-      )}
 
       <div style={styles.form}>
         {/* Sección: Presentador */}
