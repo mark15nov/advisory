@@ -6,6 +6,7 @@ import { SYSTEM_PROMPTS } from '../lib/session'
 
 /** Preguntas guía generadas por la IA antes de permitir extras o continuar. */
 const MIN_AI_QUESTIONS = 5
+const SHOW_VOICE_BUTTONS = false
 
 /** Quita restos que a veces añade el modelo (sección de advisors del plan ejecutivo). */
 function stripDiagnosticQuestionNoise(text) {
@@ -404,22 +405,24 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
           <div style={styles.inputActions}>
             <div style={styles.inputActionsLeft}>
               <span style={styles.hint}>⌘ + Enter para enviar</span>
-              <button
-                type="button"
-                style={{
-                  ...styles.micBtn,
-                  ...(isListening ? styles.micBtnActive : null),
-                  ...(!speechSupported ? styles.micBtnDisabled : null),
-                }}
-                onClick={toggleVoiceInput}
-                disabled={!speechSupported}
-                title={speechSupported ? 'Dictar respuesta con voz' : 'Tu navegador no soporta reconocimiento de voz'}
-              >
-                {isListening ? <MicOff size={14} /> : <Mic size={14} />}
-                {speechSupported
-                  ? (isListening ? 'Detener micrófono' : 'Responder con voz')
-                  : 'Voz no disponible'}
-              </button>
+              {SHOW_VOICE_BUTTONS && (
+                <button
+                  type="button"
+                  style={{
+                    ...styles.micBtn,
+                    ...(isListening ? styles.micBtnActive : null),
+                    ...(!speechSupported ? styles.micBtnDisabled : null),
+                  }}
+                  onClick={toggleVoiceInput}
+                  disabled={!speechSupported}
+                  title={speechSupported ? 'Dictar respuesta con voz' : 'Tu navegador no soporta reconocimiento de voz'}
+                >
+                  {isListening ? <MicOff size={14} /> : <Mic size={14} />}
+                  {speechSupported
+                    ? (isListening ? 'Detener micrófono' : 'Responder con voz')
+                    : 'Voz no disponible'}
+                </button>
+              )}
             </div>
             <button
               style={{ ...styles.btn, opacity: answer.trim() ? 1 : 0.4 }}

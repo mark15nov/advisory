@@ -15,7 +15,10 @@ const STORAGE_KEY = 'advisory-session'
 const TIMER_KEY = 'advisory-timer-start'
 const TIMER_PAUSED_KEY = 'advisory-timer-paused'
 const TIMER_ELAPSED_KEY = 'advisory-timer-elapsed'
-const TIMER_DURATION = 90 * 60
+const TIMER_DURATION_KEY = 'advisory-timer-duration-minutes'
+const DEFAULT_TIMER_DURATION_MINUTES = 90
+const MIN_TIMER_DURATION_MINUTES = 15
+const MAX_TIMER_DURATION_MINUTES = 240
 const BRAND_LOGO_SRC = '/assets/logo.jpeg'
 const AXON_LOGO_SRC = '/assets/vfAsset.png'
 
@@ -53,30 +56,45 @@ function loadTimerElapsed() {
   }
 }
 
+function sanitizeTimerMinutes(value) {
+  const minutes = Number(value)
+  if (!Number.isFinite(minutes)) return DEFAULT_TIMER_DURATION_MINUTES
+  return Math.min(MAX_TIMER_DURATION_MINUTES, Math.max(MIN_TIMER_DURATION_MINUTES, Math.round(minutes)))
+}
+
+function loadTimerDurationMinutes() {
+  try {
+    const val = localStorage.getItem(TIMER_DURATION_KEY)
+    return sanitizeTimerMinutes(val ?? DEFAULT_TIMER_DURATION_MINUTES)
+  } catch {
+    return DEFAULT_TIMER_DURATION_MINUTES
+  }
+}
+
 function formatTime(totalSeconds) {
   const m = Math.max(0, Math.floor(totalSeconds / 60))
   const s = Math.max(0, totalSeconds % 60)
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-function SessionTimer({ startTime, paused, elapsedWhenPaused, onTogglePause }) {
+function SessionTimer({ startTime, paused, elapsedWhenPaused, durationSeconds, onTogglePause }) {
   const [remaining, setRemaining] = useState(() => {
-    if (!startTime) return TIMER_DURATION
-    if (paused) return Math.max(0, TIMER_DURATION - elapsedWhenPaused)
+    if (!startTime) return durationSeconds
+    if (paused) return Math.max(0, durationSeconds - elapsedWhenPaused)
     const elapsed = Math.floor((Date.now() - startTime) / 1000)
-    return Math.max(0, TIMER_DURATION - elapsed)
+    return Math.max(0, durationSeconds - elapsed)
   })
   const alertShown = useRef(false)
 
   useEffect(() => {
     if (!startTime) return
     if (paused) {
-      setRemaining(Math.max(0, TIMER_DURATION - elapsedWhenPaused))
+      setRemaining(Math.max(0, durationSeconds - elapsedWhenPaused))
       return
     }
     function tick() {
       const elapsed = Math.floor((Date.now() - startTime) / 1000)
-      const left = Math.max(0, TIMER_DURATION - elapsed)
+      const left = Math.max(0, durationSeconds - elapsed)
       setRemaining(left)
       if (left === 0 && !alertShown.current) {
         alertShown.current = true
@@ -86,7 +104,7 @@ function SessionTimer({ startTime, paused, elapsedWhenPaused, onTogglePause }) {
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [startTime, paused, elapsedWhenPaused])
+  }, [startTime, paused, elapsedWhenPaused, durationSeconds])
 
   const timerColor =
     remaining < 5 * 60 ? 'var(--red)' :
@@ -154,8 +172,16 @@ export default function App() {
   const [timerStart, setTimerStart] = useState(loadTimerStart)
   const [timerPaused, setTimerPaused] = useState(loadTimerPaused)
   const [timerElapsed, setTimerElapsed] = useState(loadTimerElapsed)
+  const [timerDurationMinutes, setTimerDurationMinutes] = useState(loadTimerDurationMinutes)
   const [sessionId, setSessionId] = useState(saved?.sessionId ?? null)
   const [planOutput, setPlanOutput] = useState(saved?.planOutput ?? null)
+  const timerDurationSeconds = timerDurationMinutes * 60
+
+  const updateTimerDurationMinutes = useCallback((value) => {
+    const next = sanitizeTimerMinutes(value)
+    setTimerDurationMinutes(next)
+    localStorage.setItem(TIMER_DURATION_KEY, String(next))
+  }, [])
 
   const startTimer = useCallback(() => {
     const now = Date.now()
@@ -193,6 +219,12 @@ export default function App() {
       localStorage.setItem(TIMER_PAUSED_KEY, 'true')
     }
   }, [timerPaused, timerStart, timerElapsed])
+
+  useEffect(() => {
+    if (timerStart) return
+    if (timerPaused) return
+    setTimerElapsed(0)
+  }, [timerDurationMinutes, timerStart, timerPaused])
 
   useEffect(() => {
     if (view === 'session') {
@@ -374,6 +406,7 @@ export default function App() {
             startTime={timerStart}
             paused={timerPaused}
             elapsedWhenPaused={timerElapsed}
+            durationSeconds={timerDurationSeconds}
             onTogglePause={togglePause}
           />
         )}
@@ -410,6 +443,8 @@ export default function App() {
             initialData={session}
             timerRunning={!!timerStart}
             onStartTimer={startTimer}
+            timerDurationMinutes={timerDurationMinutes}
+            onChangeTimerDuration={updateTimerDurationMinutes}
             onStart={(data) => {
               setSession(data)
               if (!sessionId) setSessionId(Date.now().toString())

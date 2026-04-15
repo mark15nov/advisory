@@ -123,16 +123,26 @@ Considerando tanto lo que advirtieron los consejeros como lo que identificó la 
 Divide las acciones en 3 bloques. Usa EXACTAMENTE este formato:
 
 DÍAS 1-30: FUNDAMENTOS
-1. [acción más urgente]
-2. [segunda acción]
+- [acción independiente 1]
+- [acción independiente 2]
+- [acción independiente 3]
 
 DÍAS 31-60: EJECUCIÓN
-1. [acción de implementación]
-2. [segunda acción]
+- [acción independiente 1]
+- [acción independiente 2]
+- [acción independiente 3]
 
 DÍAS 61-90: ACELERACIÓN
-1. [acción de escala]
-2. [segunda acción]
+- [acción independiente 1]
+- [acción independiente 2]
+- [acción independiente 3]
+
+REGLAS OBLIGATORIAS PARA LA HOJA DE RUTA:
+- Escribe acciones en bullets con guion (-), no numeradas.
+- Cada bullet debe contener UNA sola acción específica y verificable.
+- NO combines acciones con conectores como "y", "además", "junto con" o ";". Si hay dos tareas, sepáralas en dos bullets.
+- En DÍAS 1-30, cuando corresponda, separa explícitamente: "Contratar consultor especializado" y "Realizar diagnóstico", y desglosa por separado "Implementar CRM", "Capacitar a los 3 agentes" y "Establecer métricas".
+- Prioriza compromisos concretos del empresario (qué hará, en qué plazo y con qué resultado esperado).
 
 ## ADVISORS RECOMENDADOS
 NO OMITAS ESTA SECCIÓN si el bloque "CANDIDATOS ADVISORY DESDE BASE DE DATOS" incluye al menos un nombre. Debe aparecer ANTES de "## CARTA DEL CONSEJO" y con el encabezado exacto "## ADVISORS RECOMENDADOS".
