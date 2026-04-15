@@ -33,8 +33,10 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
   const [showOwnQuestionForm, setShowOwnQuestionForm] = useState(false)
   const [ownQuestionText, setOwnQuestionText] = useState('')
   const lastFailedQaRef = useRef(null)
+  const qaListRef = useRef(null)
   const bottomRef = useRef(null)
   const recognitionRef = useRef(null)
+  const shouldStickToBottomRef = useRef(true)
 
   const questionCount = qa.length
   const currentQa = qa[qa.length - 1]
@@ -47,8 +49,16 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
   }, [])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [qa, streamingQuestion])
+    if (!shouldStickToBottomRef.current) return
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [qa])
+
+  function handleQaListScroll() {
+    const el = qaListRef.current
+    if (!el) return
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    shouldStickToBottomRef.current = distanceToBottom < 120
+  }
 
   useEffect(() => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -172,7 +182,10 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
       })
 
       const cleaned = stripDiagnosticQuestionNoise(streamed)
-      const newQa = [...currentQa, { question: cleaned, answer: null, source: 'ai' }]
+      const safeQuestion = cleaned
+        || String(streamed || '').trim()
+        || '¿Podrías ampliar el problema principal que buscas resolver en este momento?'
+      const newQa = [...currentQa, { question: safeQuestion, answer: null, source: 'ai' }]
       setQa(newQa)
       setStreamingQuestion('')
       setError(null)
@@ -296,7 +309,7 @@ export default function QuestionsPhase({ session, onComplete, initialHistory }) 
       </div>
 
       {/* Q&A History */}
-      <div style={styles.qaList}>
+      <div ref={qaListRef} style={styles.qaList} onScroll={handleQaListScroll}>
         {qa.map((item, i) => (
           <div key={i} style={styles.qaBlock}>
             <div
@@ -503,6 +516,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
+    minHeight: 0,
     maxWidth: 800,
     margin: '0 auto',
     padding: '0 24px',
@@ -548,6 +562,7 @@ const styles = {
   },
   qaList: {
     flex: 1,
+    minHeight: 0,
     overflowY: 'auto',
     display: 'flex',
     flexDirection: 'column',

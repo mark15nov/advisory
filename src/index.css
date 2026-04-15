@@ -23,7 +23,7 @@
   --font-display: 'Playfair Display', Georgia, serif;
   --font-body: 'DM Sans', sans-serif;
   --font-mono: 'DM Mono', monospace;
-  --ui-text-scale: 1.12;
+  --ui-text-scale: 1;
 }
 
 *, *::before, *::after {
@@ -66,20 +66,6 @@ textarea, input, select {
   font-family: var(--font-body);
 }
 
-p,
-span,
-label,
-li,
-td,
-th,
-small,
-button,
-input,
-select,
-textarea {
-  font-size: calc(1em * var(--ui-text-scale)) !important;
-}
-
 h1 {
   font-size: clamp(2rem, 2.8vw, 2.6rem) !important;
 }
@@ -94,9 +80,6 @@ h3 {
 
 /* ===== Print Global Overrides ===== */
 @media print {
-  html {
-    zoom: 1 !important;
-  }
   *, *::before, *::after {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
@@ -124,7 +107,7 @@ h3 {
 
 @media (max-width: 768px) {
   :root {
-    --ui-text-scale: 1.06;
+    --ui-text-scale: 1;
   }
 
   body {

@@ -2,6 +2,7 @@
 
 export const ADVISORY_PICK_MIN = 1
 export const ADVISORY_PICK_MAX = 3
+export const ADVISORY_PICK_POOL_SIZE = 12
 
 function tokenizeText(text) {
   return String(text || '')
@@ -176,6 +177,52 @@ function extractSection(fullText, titleRegex) {
   return out.join('\n').trim()
 }
 
+function normalizeTag(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function collectRowSignals(row) {
+  const specialties = Array.isArray(row.especialidades) ? row.especialidades : []
+  const industries = Array.isArray(row.industrias) ? row.industrias : []
+  const location = normalizeTag(row.ubicacion || '')
+
+  const specialtySet = new Set(specialties.map(normalizeTag).filter(Boolean))
+  const industrySet = new Set(industries.map(normalizeTag).filter(Boolean))
+  const locationSet = location ? new Set([location]) : new Set()
+
+  return {
+    specialtySet,
+    industrySet,
+    locationSet,
+    hasSignals: specialtySet.size > 0 || industrySet.size > 0 || locationSet.size > 0,
+  }
+}
+
+function overlapSize(a, b) {
+  if (!a.size || !b.size) return 0
+  let n = 0
+  for (const value of a) {
+    if (b.has(value)) n += 1
+  }
+  return n
+}
+
+function deterministicNoise(seedText) {
+  let h = 2166136261
+  const s = String(seedText || '')
+  for (let i = 0; i < s.length; i += 1) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return ((h >>> 0) % 1000) / 1000
+}
+
 /**
  * Re-ranking para cuando ya existe plan generado:
  * prioriza capacidad de ejecutar/acompañar acciones del plan y hoja de ruta.
@@ -236,8 +283,56 @@ export function scoreAdvisoryRowsByGeneratedPlan(rows, profile, fullPlanText) {
  */
 export function pickTopAdvisoryCandidates(sortedRows) {
   if (!Array.isArray(sortedRows) || sortedRows.length === 0) return []
-  const n = Math.min(ADVISORY_PICK_MAX, sortedRows.length)
-  return sortedRows.slice(0, n)
+  const n = Math.max(ADVISORY_PICK_MIN, Math.min(ADVISORY_PICK_MAX, sortedRows.length))
+  const poolSize = Math.min(ADVISORY_PICK_POOL_SIZE, sortedRows.length)
+  const pool = sortedRows.slice(0, poolSize)
+  const todaySeed = new Date().toISOString().slice(0, 10)
+
+  const remaining = pool.map((row, idx) => ({
+    row,
+    idx,
+    signals: collectRowSignals(row),
+    noise: deterministicNoise(`${todaySeed}:${row.id || row.nombre || idx}`),
+  }))
+
+  const picked = []
+  const pickedSignalSets = []
+
+  while (picked.length < n && remaining.length > 0) {
+    let bestIdx = 0
+    let bestAdjusted = Number.NEGATIVE_INFINITY
+
+    for (let i = 0; i < remaining.length; i += 1) {
+      const candidate = remaining[i]
+      const baseScore = Number(candidate.row.fitScore || 0)
+      let diversityPenalty = 0
+
+      // Penaliza perfiles demasiado similares a los ya elegidos para evitar repeticiones.
+      for (const prev of pickedSignalSets) {
+        diversityPenalty += overlapSize(candidate.signals.specialtySet, prev.specialtySet) * 1.6
+        diversityPenalty += overlapSize(candidate.signals.industrySet, prev.industrySet) * 1.4
+        diversityPenalty += overlapSize(candidate.signals.locationSet, prev.locationSet) * 0.8
+      }
+
+      // Si no hay señales estructuradas, aplica ligera penalización para priorizar perfiles clasificables.
+      if (!candidate.signals.hasSignals) diversityPenalty += 0.7
+
+      // Rotación mínima y controlada: desempata/mezcla cercanos sin destruir relevancia.
+      const rotationBoost = candidate.noise * 1.2
+      const adjusted = baseScore - diversityPenalty + rotationBoost
+
+      if (adjusted > bestAdjusted) {
+        bestAdjusted = adjusted
+        bestIdx = i
+      }
+    }
+
+    const [winner] = remaining.splice(bestIdx, 1)
+    picked.push(winner.row)
+    pickedSignalSets.push(winner.signals)
+  }
+
+  return picked
 }
 
 /**
