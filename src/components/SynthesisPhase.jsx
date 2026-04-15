@@ -351,6 +351,31 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
       },
     })
     if (isCancelled?.()) return
+    try {
+      const profileWithPlan = {
+        company: session.company || '',
+        industry: session.industry || '',
+        location: session.location || '',
+        role: session.role || '',
+        caseText: session.caseText || '',
+        whatYouDo: session.whatYouDo || '',
+        differentiation: session.differentiation || '',
+        planText: streamed || '',
+      }
+      const rr = await authedFetch('/api/advisory-recommendations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profileWithPlan),
+      })
+      if (!isCancelled?.() && rr.ok) {
+        const data = await rr.json()
+        const list = Array.isArray(data.candidates) ? data.candidates : []
+        setDirectoryAdvisors(list)
+        setDirectoryStatus(list.length ? 'ok' : 'empty')
+      }
+    } catch {
+      // Si falla el re-ranking post-plan, se conserva la lista inicial.
+    }
     setDone(true)
     onDone(streamed)
   }
@@ -431,12 +456,18 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
     let current = null
 
     for (const line of lines) {
+      const trimmed = line.trim()
       const blockMatch = line.match(/^DÍAS?\s*(\d+[-–]\d+):\s*(.+)/i)
       if (blockMatch) {
         if (current) blocks.push(current)
         current = { range: blockMatch[1], title: blockMatch[2].trim(), items: [] }
-      } else if (current && /^\d+\./.test(line.trim())) {
-        current.items.push(line.trim().replace(/^\d+\.\s*/, ''))
+      } else if (current && (/^\d+\./.test(trimmed) || /^[-*]\s+/.test(trimmed))) {
+        current.items.push(
+          trimmed
+            .replace(/^\d+\.\s*/, '')
+            .replace(/^[-*]\s+/, '')
+            .trim(),
+        )
       }
     }
     if (current) blocks.push(current)

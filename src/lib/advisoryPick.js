@@ -3,6 +3,16 @@
 export const ADVISORY_PICK_MIN = 1
 export const ADVISORY_PICK_MAX = 3
 
+function tokenizeText(text) {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+}
+
 function matchedItemsFromStringArray(arr, profileTokens, tokenize) {
   if (!Array.isArray(arr)) return []
   const seen = new Set()
@@ -79,14 +89,7 @@ function buildFitSummary({
  */
 export function scoreAdvisoryRows(rows, profile) {
   if (!Array.isArray(rows) || !profile) return []
-
-  const tokenize = (text) => String(text || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^\w\s]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean)
+  const tokenize = tokenizeText
 
   const profileTokens = new Set(tokenize([
     profile.company,
@@ -147,6 +150,85 @@ export function scoreAdvisoryRows(rows, profile) {
   })
 
   return scored.sort((a, b) => b.fitScore - a.fitScore)
+}
+
+function extractSection(fullText, titleRegex) {
+  const text = String(fullText || '').replace(/\r\n/g, '\n')
+  const lines = text.split('\n')
+  let inSection = false
+  const out = []
+  for (const line of lines) {
+    const m = line.match(/^##\s+(.+)$/)
+    if (m) {
+      const heading = String(m[1] || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+      if (titleRegex.test(heading)) {
+        inSection = true
+        continue
+      }
+      if (inSection) break
+    }
+    if (inSection) out.push(line)
+  }
+  return out.join('\n').trim()
+}
+
+/**
+ * Re-ranking para cuando ya existe plan generado:
+ * prioriza capacidad de ejecutar/acompañar acciones del plan y hoja de ruta.
+ */
+export function scoreAdvisoryRowsByGeneratedPlan(rows, profile, fullPlanText) {
+  if (!Array.isArray(rows) || !profile) return []
+  const baseSorted = scoreAdvisoryRows(rows, profile)
+  if (!String(fullPlanText || '').trim()) return baseSorted
+
+  const planSection = extractSection(fullPlanText, /^plan de accion$/i)
+  const roadmapSection = extractSection(fullPlanText, /^hoja de ruta/i)
+  const impactSection = extractSection(fullPlanText, /^proyeccion de impacto$/i)
+  const executionContext = [planSection, roadmapSection, impactSection]
+    .filter(Boolean)
+    .join('\n')
+    .trim()
+  if (!executionContext) return baseSorted
+
+  const executionTokens = new Set(tokenizeText(executionContext))
+  const countExecOverlap = (tokens) => {
+    let n = 0
+    for (const token of tokens) {
+      if (executionTokens.has(token)) n += 1
+    }
+    return n
+  }
+
+  const rescored = baseSorted.map((row) => {
+    const domainText = [
+      row.productos_servicios,
+      row.bio,
+      row.empresa,
+      ...(Array.isArray(row.especialidades) ? row.especialidades : []),
+      ...(Array.isArray(row.industrias) ? row.industrias : []),
+    ].filter(Boolean).join(' ')
+
+    const domainTokens = tokenizeText(domainText)
+    const overlap = countExecOverlap(domainTokens)
+    const executionBoost = overlap * 4
+
+    const oldSummary = String(row.fitSummary || '').trim()
+    const executionHint = executionBoost > 0
+      ? ` También comparte vocabulario con acciones de ejecución del plan y hoja de ruta (señales: ${Math.min(overlap, 12)}).`
+      : ' Aporta principalmente como consejería estratégica general para el caso.'
+
+    return {
+      ...row,
+      fitScore: Number(row.fitScore || 0) + executionBoost,
+      fitSummary: `${oldSummary || 'Perfil con encaje general al caso.'}${executionHint}`.trim(),
+    }
+  })
+
+  return rescored.sort((a, b) => b.fitScore - a.fitScore)
 }
 
 /**

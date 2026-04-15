@@ -1,10 +1,11 @@
 import {
   scoreAdvisoryRows,
+  scoreAdvisoryRowsByGeneratedPlan,
   pickTopAdvisoryCandidates,
 } from '../src/lib/advisoryPick.js'
 import { verifySupabaseJwt, getBearerTokenFromRequest } from '../src/lib/verifySupabaseJwt.js'
 
-async function fetchRowsAndPick(profile) {
+async function fetchRowsAndPick(profile, planText = '') {
   const SUPABASE_URL = process.env.SUPABASE_URL
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !profile) return []
@@ -23,7 +24,9 @@ async function fetchRowsAndPick(profile) {
   if (!response.ok) return []
   const raw = await response.json()
   const rows = Array.isArray(raw) ? raw.filter((r) => r.activo !== false) : []
-  const sorted = scoreAdvisoryRows(rows, profile)
+  const sorted = String(planText || '').trim()
+    ? scoreAdvisoryRowsByGeneratedPlan(rows, profile, planText)
+    : scoreAdvisoryRows(rows, profile)
   return pickTopAdvisoryCandidates(sorted)
 }
 
@@ -52,7 +55,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const candidates = await fetchRowsAndPick(profile)
+    const candidates = await fetchRowsAndPick(profile, profile?.planText || '')
     const sanitized = candidates.map((c) => ({
       id: c.id,
       nombre: c.nombre,

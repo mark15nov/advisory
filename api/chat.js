@@ -1,5 +1,6 @@
 import {
   scoreAdvisoryRows,
+  scoreAdvisoryRowsByGeneratedPlan,
   pickTopAdvisoryCandidates,
   buildAdvisoryContext,
   normalizeClientAdvisoryCandidates,
@@ -198,6 +199,66 @@ ${text}`,
   return replaceScorecardSection(text, scorecardOnly)
 }
 
+function extractSectionText(report = '', headingRegex) {
+  const lines = String(report || '').replace(/\r\n/g, '\n').split('\n')
+  const out = []
+  let inSection = false
+  for (const line of lines) {
+    const m = line.match(/^##\s+(.+)$/)
+    if (m) {
+      const title = String(m[1] || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+      if (headingRegex.test(title)) {
+        inSection = true
+        continue
+      }
+      if (inSection) break
+    }
+    if (inSection) out.push(line)
+  }
+  return out.join('\n').trim()
+}
+
+function buildAdvisorsSectionFromCandidates(candidates = []) {
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    return '## ADVISORS RECOMENDADOS\nSin candidatos disponibles en la base de datos para este caso.'
+  }
+
+  const lines = ['## ADVISORS RECOMENDADOS']
+  candidates.forEach((c, i) => {
+    const score = Number(c.fitScore || 0)
+    const ajuste = score >= 18 ? 'ALTO' : 'MEDIO'
+    const specialties = Array.isArray(c.especialidades) ? c.especialidades.filter(Boolean) : []
+    const specialty = specialties[0] || c.industrias?.[0] || 'Asesoría estratégica empresarial'
+    const why = String(c.fitSummary || '').trim() || 'Puede ayudar a ejecutar y acelerar acciones clave del plan de 90 días.'
+    lines.push(`${i + 1}. ${c.nombre} - Ajuste: ${ajuste}`)
+    lines.push(`- Especialidad clave: ${specialty}`)
+    lines.push(`- Justificación: ${why}`)
+    lines.push('')
+  })
+  return lines.join('\n').trim()
+}
+
+function replaceOrInsertAdvisorsSection(report = '', advisorsSection = '') {
+  const text = String(report || '').replace(/\r\n/g, '\n')
+  if (!text.trim()) return advisorsSection
+
+  const sectionRegex = /##\s*ADVISORS RECOMENDADOS[\s\S]*?(?=\n##\s+[^\n]+|$)/i
+  if (sectionRegex.test(text)) {
+    return text.replace(sectionRegex, advisorsSection.trim())
+  }
+
+  const cartaRegex = /\n##\s*CARTA DEL CONSEJO/i
+  if (cartaRegex.test(text)) {
+    return text.replace(cartaRegex, `\n\n${advisorsSection.trim()}\n\n## CARTA DEL CONSEJO`)
+  }
+
+  return `${text.trim()}\n\n${advisorsSection.trim()}`
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: { message: 'Method not allowed' } })
@@ -257,6 +318,29 @@ export default async function handler(req, res) {
     const raw = await response.json()
     const rows = Array.isArray(raw) ? raw.filter((r) => r.activo !== false) : []
     const sorted = scoreAdvisoryRows(rows, profile)
+    return pickTopAdvisoryCandidates(sorted)
+  }
+
+  async function rerankAdvisoryCandidatesByPlan(profile, reportText) {
+    const SUPABASE_URL = process.env.SUPABASE_URL
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !profile || !reportText) return []
+
+    const params = new URLSearchParams({
+      select: 'id,nombre,empresa,web,email,productos_servicios,especialidades,industrias,etapas,ubicacion,bio,experiencia_anios,score,activo',
+      limit: '500',
+    })
+
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/advisory?${params.toString()}`, {
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+    })
+    if (!response.ok) return []
+    const raw = await response.json()
+    const rows = Array.isArray(raw) ? raw.filter((r) => r.activo !== false) : []
+    const sorted = scoreAdvisoryRowsByGeneratedPlan(rows, profile, reportText)
     return pickTopAdvisoryCandidates(sorted)
   }
 
@@ -355,7 +439,7 @@ export default async function handler(req, res) {
       const streamedText = await relayAnthropicStreamToClient(response, (chunk) => {
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`)
       })
-      const finalText = await ensureScorecardQuality({
+      let finalText = await ensureScorecardQuality({
         text: streamedText,
         enabled: scorecardValidationEnabled,
         apiKey: ANTHROPIC_API_KEY,
@@ -363,6 +447,14 @@ export default async function handler(req, res) {
         systemPrompt,
         anthropicMessages,
       })
+      const planSectionText = extractSectionText(finalText, /^plan de accion$/i)
+      if (advisoryProfile && planSectionText) {
+        const topByPlan = await rerankAdvisoryCandidatesByPlan(advisoryProfile, finalText)
+        if (topByPlan.length > 0) {
+          const advisorsSection = buildAdvisorsSectionFromCandidates(topByPlan)
+          finalText = replaceOrInsertAdvisorsSection(finalText, advisorsSection)
+        }
+      }
 
       // Si la post-validación alteró el resultado final, enviamos el texto completo corregido
       // para que el cliente termine con la versión consolidada.
@@ -377,7 +469,7 @@ export default async function handler(req, res) {
         .filter((b) => b?.type === 'text')
         .map((b) => b.text || '')
         .join('')
-      const finalText = await ensureScorecardQuality({
+      let finalText = await ensureScorecardQuality({
         text,
         enabled: scorecardValidationEnabled,
         apiKey: ANTHROPIC_API_KEY,
@@ -385,6 +477,14 @@ export default async function handler(req, res) {
         systemPrompt,
         anthropicMessages,
       })
+      const planSectionText = extractSectionText(finalText, /^plan de accion$/i)
+      if (advisoryProfile && planSectionText) {
+        const topByPlan = await rerankAdvisoryCandidatesByPlan(advisoryProfile, finalText)
+        if (topByPlan.length > 0) {
+          const advisorsSection = buildAdvisorsSectionFromCandidates(topByPlan)
+          finalText = replaceOrInsertAdvisorsSection(finalText, advisorsSection)
+        }
+      }
       res.json({ text: finalText })
     }
   } catch (err) {

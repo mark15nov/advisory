@@ -140,6 +140,41 @@ function parseAnthropicError(rawError) {
   }
 }
 
+async function readRawBody(req) {
+  const chunks = []
+  for await (const chunk of req) chunks.push(chunk)
+  return Buffer.concat(chunks)
+}
+
+function extractBoundary(contentType = '') {
+  const m = String(contentType).match(/boundary=([^;]+)/i)
+  return m?.[1] ? m[1].trim() : ''
+}
+
+function parseMultipartAudio(buffer, boundary) {
+  const body = buffer.toString('binary')
+  const marker = `--${boundary}`
+  const sections = body.split(marker)
+
+  for (const section of sections) {
+    if (!section.includes('name="audio"')) continue
+    const splitIndex = section.indexOf('\r\n\r\n')
+    if (splitIndex === -1) continue
+
+    const rawHeaders = section.slice(0, splitIndex)
+    const contentTypeMatch = rawHeaders.match(/Content-Type:\s*([^\r\n]+)/i)
+    const fileNameMatch = rawHeaders.match(/filename="([^"]+)"/i)
+    const mimeType = contentTypeMatch?.[1]?.trim() || 'audio/webm'
+    const filename = fileNameMatch?.[1]?.trim() || 'audio.webm'
+
+    let dataPart = section.slice(splitIndex + 4)
+    dataPart = dataPart.replace(/\r\n--$/, '').replace(/\r\n$/, '')
+    const audioBuffer = Buffer.from(dataPart, 'binary')
+    return { audioBuffer, mimeType, filename }
+  }
+  return null
+}
+
 async function callAnthropic({ system, advisoryContext, messages, stream, maxTokens = 8192 }) {
   const systemPrompt = [system, advisoryContext].filter(Boolean).join('\n\n')
   const anthropicMessages = toAnthropicMessages(messages)
@@ -306,6 +341,60 @@ app.post('/api/chat', requireSupabaseAuth, async (req, res) => {
   } catch (err) {
     console.error('Proxy error:', err)
     res.status(500).json({ error: { message: 'Error interno del proxy' } })
+  }
+})
+
+app.post('/api/transcribe', requireSupabaseAuth, async (req, res) => {
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY
+  if (!OPENAI_API_KEY) {
+    return res.status(503).json({
+      error: { message: 'Falta OPENAI_API_KEY para transcripción de voz.' },
+    })
+  }
+
+  try {
+    const contentType = req.headers['content-type'] || ''
+    const boundary = extractBoundary(contentType)
+    if (!boundary) {
+      return res.status(400).json({ error: { message: 'Content-Type multipart inválido.' } })
+    }
+
+    const rawBody = await readRawBody(req)
+    const parsed = parseMultipartAudio(rawBody, boundary)
+    if (!parsed?.audioBuffer?.length) {
+      return res.status(400).json({ error: { message: 'No se recibió audio para transcribir.' } })
+    }
+
+    const form = new FormData()
+    const blob = new Blob([parsed.audioBuffer], { type: parsed.mimeType || 'audio/webm' })
+    form.append('file', blob, parsed.filename || 'audio.webm')
+    form.append('model', 'whisper-1')
+    form.append('language', 'es')
+
+    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+      body: form,
+    })
+    if (!response.ok) {
+      const txt = await response.text()
+      const lower = String(txt || '').toLowerCase()
+      if (response.status === 429) {
+        const isQuota = lower.includes('insufficient_quota') || lower.includes('quota')
+        const message = isQuota
+          ? 'Se alcanzó la cuota de OpenAI para transcripción. Revisa facturación/límites de la API key.'
+          : 'Demasiadas solicitudes de transcripción. Espera unos segundos e intenta de nuevo.'
+        res.setHeader('Retry-After', '20')
+        return res.status(429).json({ error: { message } })
+      }
+      return res.status(response.status).json({ error: { message: txt || 'Error al transcribir audio.' } })
+    }
+
+    const data = await response.json()
+    return res.status(200).json({ text: String(data?.text || '').trim() })
+  } catch (err) {
+    console.error('transcribe:', err)
+    return res.status(500).json({ error: { message: 'Error interno en transcripción.' } })
   }
 })
 
