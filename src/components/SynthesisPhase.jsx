@@ -83,6 +83,14 @@ function lineMatchesCompanyHeading(line, companyNorm) {
   return false
 }
 
+function normalizeSectionContentForCompare(content) {
+  return String(content || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .toLowerCase()
+}
+
 /**
  * Extrae el contenido de la sección ## ADVISORS RECOMENDADOS del markdown completo.
  */
@@ -612,16 +620,25 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
     if (done) {
       cleaned.sort((a, b) => canonicalIndex(a.title) - canonicalIndex(b.title))
 
-      // Fusionar secciones duplicadas que mapean al mismo índice canónico
+      // Deduplicar secciones canónicas sin concatenar texto para evitar repeticiones.
       const merged = []
       for (const sec of cleaned) {
         const ci = canonicalIndex(sec.title)
         const prev = merged.length > 0 ? merged[merged.length - 1] : null
         if (prev && canonicalIndex(prev.title) === ci) {
-          // Fusionar contenido, quedarnos con el título más corto (canónico)
           const prevContent = (prev.content || '').trim()
           const secContent = (sec.content || '').trim()
-          prev.content = [prevContent, secContent].filter(Boolean).join('\n\n')
+          const prevNorm = normalizeSectionContentForCompare(prevContent)
+          const secNorm = normalizeSectionContentForCompare(secContent)
+
+          if (secNorm && !prevNorm) {
+            prev.content = secContent
+          } else if (secNorm && prevNorm && secNorm.includes(prevNorm)) {
+            prev.content = secContent
+          } else if (secNorm && prevNorm && !prevNorm.includes(secNorm) && secNorm.length > prevNorm.length) {
+            prev.content = secContent
+          }
+
           if (sec.title.length < prev.title.length) prev.title = sec.title
         } else {
           merged.push({ ...sec })
