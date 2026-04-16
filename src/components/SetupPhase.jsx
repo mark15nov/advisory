@@ -484,6 +484,16 @@ export default function SetupPhase({
         </div>
       )}
 
+      {IS_DEV && (
+        <button
+          type="button"
+          style={styles.devAutofillBtn}
+          onClick={applyDevAutofill}
+        >
+          Auto llenar formulario
+        </button>
+      )}
+
 
       <div style={styles.form}>
         {/* Sección: Presentador */}
