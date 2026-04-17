@@ -546,6 +546,8 @@ const styles = {
     padding: '14px 16px',
     margin: '16px 0',
     flexShrink: 0,
+    maxHeight: 160,
+    overflowY: 'auto',
   },
   caseLabel: {
     display: 'flex', alignItems: 'center', gap: 6,
