@@ -1847,28 +1847,30 @@ const synthesisStyles = `
     .pph-date { color: #888 !important; }
 
     .plan-section {
+      display: block !important;
       background: white !important;
       border: none !important;
       border-radius: 0 !important;
-      padding: 0 0 22px 0 !important;
-      margin-bottom: 22px;
-      border-bottom: 1px solid #e0e0e0 !important;
+      padding: 0 0 28px 0 !important;
+      margin-bottom: 0 !important;
+      border-bottom: none !important;
       page-break-inside: auto;
       break-inside: auto;
     }
     .print-all-sections .plan-section {
-      page-break-before: always;
-      break-before: page;
+      page-break-after: always;
+      break-after: page;
     }
-    .print-page-header + .plan-section {
-      page-break-before: avoid !important;
-      break-before: avoid !important;
+    .print-all-sections .plan-section:last-child {
+      page-break-after: auto;
+      break-after: auto;
     }
     .plan-section:last-child {
       border-bottom: none !important;
     }
 
     .plan-section-header {
+      display: flex !important;
       border-bottom: none !important;
       padding-bottom: 8px !important;
       margin-bottom: 4px;
@@ -1897,7 +1899,7 @@ const synthesisStyles = `
     }
 
     .plan-para {
-      color: #333 !important; font-size: 11.5pt !important; line-height: 1.6 !important;
+      color: #333 !important; font-size: 10.5pt !important; line-height: 1.5 !important;
       overflow: visible !important; white-space: normal !important;
       word-wrap: break-word !important; overflow-wrap: break-word !important;
       word-break: break-word !important;
@@ -1907,13 +1909,13 @@ const synthesisStyles = `
     }
 
     .plan-numbered {
-      color: #333 !important; font-size: 11.5pt !important; line-height: 1.6 !important;
+      color: #333 !important; font-size: 10.5pt !important; line-height: 1.5 !important;
       gap: 10px !important;
       page-break-inside: avoid;
       break-inside: avoid;
     }
     .plan-num-text {
-      color: #333 !important; font-size: 11.5pt !important;
+      color: #333 !important; font-size: 10.5pt !important;
       overflow: visible !important; white-space: normal !important;
       word-wrap: break-word !important; overflow-wrap: break-word !important;
       word-break: break-word !important;
@@ -2040,8 +2042,6 @@ const synthesisStyles = `
       border-radius: 0 !important;
       padding: 40px 48px !important;
       margin-top: 20px !important;
-      page-break-before: always !important;
-      break-before: page !important;
       position: relative;
     }
     .plan-section-carta::before {
@@ -2089,8 +2089,8 @@ const synthesisStyles = `
     .plan-markdown .plan-para,
     .plan-markdown-p,
     .plan-markdown-li {
-      color: #333 !important; font-size: 11.5pt !important;
-      line-height: 1.6 !important;
+      color: #333 !important; font-size: 10.5pt !important;
+      line-height: 1.5 !important;
       overflow-wrap: anywhere !important;
       word-break: break-word !important;
       hyphens: auto !important;
