@@ -986,7 +986,12 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
           <span className="pph-sep">·</span>
           <span className="pph-date">{printDate}</span>
         </div>
-        {printSections.map((sec, i) => (
+        {printSections
+          .filter(sec =>
+            sec.content?.trim() ||
+            isAdvisorsRecomendadosSection(sec.title)
+          )
+          .map((sec, i) => (
           <div key={i} className={`plan-section ${sec.title.toUpperCase().includes('CARTA') ? 'plan-section-carta' : ''}`}>
             <div className="plan-section-header">
               <span className="plan-section-num">{sec.num}</span>
@@ -1067,9 +1072,14 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
 
         {/* Print button */}
         <div className="synthesis-footer">
-          <button className="print-btn" onClick={() => window.print()}>
-            <Printer size={16} /> Exportar / Imprimir
-          </button>
+          <div className="synthesis-footer-inner">
+            <button className="print-btn" onClick={() => window.print()}>
+              <Printer size={16} /> Exportar / Imprimir
+            </button>
+            <p className="print-hint">
+              En el diálogo de impresión, desactiva <strong>Encabezados y pies de página</strong> para un PDF limpio.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -1644,6 +1654,12 @@ const synthesisStyles = `
 
   .synthesis-cursor { display: inline-block; animation: blink 0.8s infinite; color: var(--gold); font-size: 18px; }
   .synthesis-footer { display: flex; justify-content: center; padding-bottom: 16px; padding-top: 8px; }
+  .synthesis-footer-inner { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .print-hint {
+    font-size: 12px; color: var(--text-dim); text-align: center;
+    margin: 0; line-height: 1.5;
+  }
+  .print-hint strong { color: var(--text-muted); font-weight: 600; }
   .print-btn {
     display: flex; align-items: center; gap: 10px;
     background: var(--accent); border: none; color: #fff; border-radius: 6px;
@@ -1658,7 +1674,35 @@ const synthesisStyles = `
       print-color-adjust: exact !important;
     }
 
-    @page { margin: 2cm 1.8cm; size: letter; }
+    @page {
+      margin: 2cm 1.8cm;
+      size: letter;
+      @top-center {
+        content: "Advisory Business Boards · CONSILIUM";
+        font-family: 'DM Sans', sans-serif;
+        font-size: 8pt;
+        color: #aaa;
+        letter-spacing: 0.08em;
+      }
+      @bottom-right {
+        content: "Pág. " counter(page);
+        font-family: 'DM Sans', sans-serif;
+        font-size: 8pt;
+        color: #999;
+      }
+      @bottom-left {
+        content: "Documento confidencial";
+        font-family: 'DM Sans', sans-serif;
+        font-size: 8pt;
+        color: #bbb;
+        letter-spacing: 0.05em;
+      }
+    }
+    @page :first {
+      @top-center { content: none; }
+      @bottom-right { content: none; }
+      @bottom-left { content: none; }
+    }
 
     html, body, #root, main {
       background: white !important;
@@ -1669,6 +1713,10 @@ const synthesisStyles = `
 
     nav, .synthesis-footer, .synthesis-loading, .synthesis-cursor, .screen-header,
     .slide-container, .slide-nav, .slide-top, button {
+      display: none !important;
+    }
+
+    body > *:not(#root) {
       display: none !important;
     }
 
@@ -1706,10 +1754,9 @@ const synthesisStyles = `
       display: flex !important;
       flex-direction: column !important;
       justify-content: space-between !important;
-      min-height: calc(100vh - 6cm) !important;
+      min-height: 21.7cm !important;
       background: #1a1a2e !important;
       color: white !important;
-      padding: 0 !important;
       margin: -3cm -2cm 0 -2cm !important;
       padding: 3cm 2cm 2cm 2cm !important;
       page-break-after: always;
@@ -1845,6 +1892,8 @@ const synthesisStyles = `
 
     .plan-section-content {
       gap: 8px !important;
+      page-break-before: avoid;
+      break-before: avoid;
     }
 
     .plan-para {
@@ -1893,6 +1942,14 @@ const synthesisStyles = `
       border: 1px solid #ccc !important;
       border-radius: 0 !important;
       overflow: visible !important;
+      /* Tablas grandes pueden romperse entre páginas — evita headers huérfanos */
+      page-break-inside: auto;
+      break-inside: auto;
+    }
+    .plan-table thead {
+      display: table-header-group;
+    }
+    .plan-table tr {
       page-break-inside: avoid;
       break-inside: avoid;
     }
@@ -1996,12 +2053,7 @@ const synthesisStyles = `
       background: linear-gradient(90deg, #1a1a2e 0%, #c62828 50%, #1a1a2e 100%);
     }
     .plan-section-carta::after {
-      content: '';
-      position: absolute;
-      bottom: 0; left: 0; right: 0;
-      height: 6px;
-      border-radius: 0;
-      background: linear-gradient(90deg, #1a1a2e 0%, #c62828 50%, #1a1a2e 100%);
+      display: none !important;
     }
     .plan-section-carta .plan-section-header {
       text-align: center !important;
@@ -2094,16 +2146,9 @@ const synthesisStyles = `
     }
 
     /* ---- PRINT FOOTER ---- */
+    /* Oculto: sustituido por los @page margin boxes (@bottom-left / @bottom-right) */
     .print-footer {
-      display: block !important;
-      padding: 0 42px 26px;
-    }
-    .print-footer-line {
-      border-top: 2px solid #1a1a2e; margin-bottom: 12px;
-    }
-    .print-footer-content {
-      display: flex; justify-content: space-between;
-      font-size: 9px; color: #888 !important; letter-spacing: 0.08em;
+      display: none !important;
     }
   }
 `
