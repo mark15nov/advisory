@@ -240,6 +240,31 @@ export default function SynthesisPhase({ session, questionHistory, experts, onDo
   const initialPlanRef = useRef(initialPlanOutput)
   initialPlanRef.current = initialPlanOutput
 
+  async function syncDirectoryWithPlan(planText, isCancelled) {
+    if (!String(planText || '').trim()) return
+    const profileWithPlan = {
+      company: session.company || '',
+      industry: session.industry || '',
+      location: session.location || '',
+      role: session.role || '',
+      caseText: session.caseText || '',
+      whatYouDo: session.whatYouDo || '',
+      differentiation: session.differentiation || '',
+      planText: String(planText || '').trim(),
+    }
+    const rr = await authedFetch('/api/advisory-recommendations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(profileWithPlan),
+    })
+    if (!isCancelled?.() && rr.ok) {
+      const data = await rr.json()
+      const list = Array.isArray(data.candidates) ? data.candidates : []
+      setDirectoryAdvisors(list)
+      setDirectoryStatus(list.length ? 'ok' : 'empty')
+    }
+  }
+
   useEffect(() => {
     let cancelled = false
     const profile = {
@@ -282,13 +307,18 @@ export default function SynthesisPhase({ session, questionHistory, experts, onDo
           ? initialPlanRef.current.trim()
           : ''
       if (cached) {
+        try {
+          await syncDirectoryWithPlan(cached, () => cancelled)
+        } catch {
+          // Si falla esta reconciliación, se mantiene la lista inicial del directorio.
+        }
         if (!cancelled) {
           setOutput(cached)
           setDone(true)
         }
         return
       }
-      await generate(list, () => cancelled)
+      await generate(() => cancelled)
     })()
     return () => { cancelled = true }
   }, [
@@ -301,7 +331,7 @@ export default function SynthesisPhase({ session, questionHistory, experts, onDo
     session.differentiation,
   ])
 
-  async function generate(advisoryCandidatesFromClient, isCancelled) {
+  async function generate(isCancelled) {
     const currentYear = new Date().getFullYear()
     const expertSummary = experts
       .filter(e => e.name && e.opinion)
@@ -343,44 +373,19 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
     await callClaude({
       system: SYSTEM_PROMPTS.synthesis,
       messages: [{ role: 'user', content: prompt }],
-      advisoryProfile: {
-        company: session.company || '',
-        industry: session.industry || '',
-        location: session.location || '',
-        role: session.role || '',
-        caseText: session.caseText || '',
-        whatYouDo: session.whatYouDo || '',
-        differentiation: session.differentiation || '',
-      },
-      advisoryCandidatesFromClient,
-      onChunk: (chunk) => {
-        streamed += chunk
+      onChunk: (chunk, isFinal) => {
+        // Si es el chunk final del servidor (texto completo corregido), reemplazar en lugar de acumular.
+        if (isFinal) {
+          streamed = chunk
+        } else {
+          streamed += chunk
+        }
         if (!isCancelled?.()) setOutput(streamed)
       },
     })
     if (isCancelled?.()) return
     try {
-      const profileWithPlan = {
-        company: session.company || '',
-        industry: session.industry || '',
-        location: session.location || '',
-        role: session.role || '',
-        caseText: session.caseText || '',
-        whatYouDo: session.whatYouDo || '',
-        differentiation: session.differentiation || '',
-        planText: streamed || '',
-      }
-      const rr = await authedFetch('/api/advisory-recommendations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(profileWithPlan),
-      })
-      if (!isCancelled?.() && rr.ok) {
-        const data = await rr.json()
-        const list = Array.isArray(data.candidates) ? data.candidates : []
-        setDirectoryAdvisors(list)
-        setDirectoryStatus(list.length ? 'ok' : 'empty')
-      }
+      await syncDirectoryWithPlan(streamed, isCancelled)
     } catch {
       // Si falla el re-ranking post-plan, se conserva la lista inicial.
     }
@@ -774,6 +779,24 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
       return bestScore >= 1 ? bestEntry : undefined
     }
 
+    const findDbAdvisor = (aiName) => {
+      const exact = directoryAdvisors.find((a) => normAdvisorName(a?.nombre) === normAdvisorName(aiName))
+      if (exact) return exact
+      const aiTokens = normAdvisorName(aiName).split(' ').filter((t) => t.length >= 4)
+      if (aiTokens.length === 0) return undefined
+      let best = undefined
+      let bestScore = 0
+      for (const a of directoryAdvisors) {
+        const dbTokens = new Set(normAdvisorName(a?.nombre).split(' ').filter((t) => t.length >= 4))
+        const matches = aiTokens.filter((t) => dbTokens.has(t)).length
+        if (matches > bestScore) {
+          bestScore = matches
+          best = a
+        }
+      }
+      return bestScore >= 1 ? best : undefined
+    }
+
     if (directoryStatus === 'loading') {
       return wrap(
         <div className="directory-advisors-loading">
@@ -811,34 +834,45 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
         </div>
         <ol className="directory-advisors-list">
           {(() => {
+            const aiList = Object.values(aiAdvisors)
+            const renderFromAi = aiList.length > 0
+            const source = renderFromAi ? aiList : directoryAdvisors
             let rank = 0
-            return directoryAdvisors.map((a) => {
-              const aiEntry = findAiEntry(a.nombre)
+            return source.map((item) => {
+              const aiEntry = renderFromAi ? item : findAiEntry(item.nombre)
+              const dbAdvisor = renderFromAi ? findDbAdvisor(aiEntry?.nombre) : item
+              const displayName = renderFromAi ? aiEntry?.nombre : dbAdvisor?.nombre
+              rank += 1
               const justification =
                 aiEntry?.justificacion?.trim() ||
                 buildAdvisorHelpFallback({
-                  fitSummary: a.fitSummary,
+                  fitSummary: dbAdvisor?.fitSummary,
                   especialidad: aiEntry?.especialidad,
                 })
-              if (!justification) return null
-              rank += 1
-              const desc = (a.bio || a.productos_servicios || '').trim()
+              const desc = (dbAdvisor?.bio || dbAdvisor?.productos_servicios || '').trim()
+              const shownJustification = justification || 'Perfil sugerido por Claude; revisa validación con el directorio.'
+              const isVerified = Boolean(dbAdvisor?.id)
               return (
-                <li key={a.id || `adv-${rank}`} className="directory-advisors-item">
+                <li key={dbAdvisor?.id || `${normAdvisorName(displayName)}-${rank}`} className="directory-advisors-item">
                   <span className="directory-advisor-rank">{rank}</span>
                   <div className="directory-advisor-body">
-                    <div className="directory-advisor-nombre">{a.nombre}</div>
-                    {(a.empresa || a.email || a.web) && (
+                    <div className="directory-advisor-nombre">{displayName}</div>
+                    {!isVerified && (
+                      <div className="directory-advisor-meta">
+                        <span className="directory-advisor-ajuste directory-advisor-ajuste-medio">No verificado en directorio</span>
+                      </div>
+                    )}
+                    {(dbAdvisor?.empresa || dbAdvisor?.email || dbAdvisor?.web) && (
                       <div className="directory-advisor-contact">
-                        {a.empresa && <span>{a.empresa}</span>}
-                        {a.empresa && (a.email || a.web) && <span> · </span>}
-                        {a.email && (
-                          <a href={`mailto:${a.email}`} className="directory-advisor-link">{a.email}</a>
+                        {dbAdvisor?.empresa && <span>{dbAdvisor.empresa}</span>}
+                        {dbAdvisor?.empresa && (dbAdvisor?.email || dbAdvisor?.web) && <span> · </span>}
+                        {dbAdvisor?.email && (
+                          <a href={`mailto:${dbAdvisor.email}`} className="directory-advisor-link">{dbAdvisor.email}</a>
                         )}
-                        {a.email && a.web && <span> · </span>}
-                        {a.web && (
-                          <a href={a.web.startsWith('http') ? a.web : `https://${a.web}`} target="_blank" rel="noopener noreferrer" className="directory-advisor-link">
-                            {a.web}
+                        {dbAdvisor?.email && dbAdvisor?.web && <span> · </span>}
+                        {dbAdvisor?.web && (
+                          <a href={dbAdvisor.web.startsWith('http') ? dbAdvisor.web : `https://${dbAdvisor.web}`} target="_blank" rel="noopener noreferrer" className="directory-advisor-link">
+                            {dbAdvisor.web}
                           </a>
                         )}
                       </div>
@@ -861,8 +895,10 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
                         <p className="directory-advisor-desc">{desc.length > 300 ? desc.slice(0, 300) + '…' : desc}</p>
                       </div>
                     )}
-                    {/* La justificación extensa se muestra en el bloque markdown de la sección,
-                        para evitar duplicar texto dentro de la tarjeta del directorio. */}
+                    <div className="directory-advisor-justification">
+                      <span className="directory-advisor-why-label">Cómo puede ayudar</span>
+                      <p className="directory-advisor-why">{shownJustification}</p>
+                    </div>
                   </div>
                 </li>
               )
