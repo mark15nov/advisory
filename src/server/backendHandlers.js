@@ -1,9 +1,16 @@
+import { scoreAdvisoryRowsSemantic } from '../lib/advisoryEmbeddings.js'
 import {
   scoreAdvisoryRows,
   scoreAdvisoryRowsByGeneratedPlan,
   pickTopAdvisoryCandidates,
-  buildAdvisoryContext,
-  normalizeClientAdvisoryCandidates,
+  buildFullAdvisoryDatabaseContext,
+  normAdvisorNameKey,
+  extractAdvisorsSectionFromReport,
+  parseNumberedAdvisorNamesFromAdvisorsSection,
+  parsePlainAdvisorNamesFromAdvisorsSection,
+  matchAdvisoryRowsByNames,
+  matchAdvisoryRowsByNamesStrict,
+  buildCaseSeed,
 } from '../lib/advisoryPick.js'
 import { verifySupabaseJwt, getBearerTokenFromRequest } from '../lib/verifySupabaseJwt.js'
 
@@ -28,7 +35,41 @@ function envConfig() {
       .map((s) => s.trim())
       .filter(Boolean),
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+    OPENAI_EMBEDDING_MODEL: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
+    ADVISORY_CATALOG_MAX_TOTAL_CHARS: Number.parseInt(
+      String(process.env.ADVISORY_CATALOG_MAX_TOTAL_CHARS || '100000'),
+      10,
+    ) || 100000,
   }
+}
+
+/**
+ * Compara el caso (y el plan, si hay) con cada fila de `advisory` vía embeddings OpenAI
+ * si hay API key. Si `ADVISORY_SEMANTIC_SCORING=false` o la API falla, usa la heurística por tokens.
+ * Con plan + embeddings, el plan ya entra en el texto de la consulta; el boost de tokens del plan
+ * solo aplica al fallback heurístico.
+ */
+async function scoreAdvisoryRowsForRequest(rows, profile, fullPlanText) {
+  if (!Array.isArray(rows) || !profile) return []
+  const { OPENAI_API_KEY, OPENAI_EMBEDDING_MODEL } = envConfig()
+  const useSemantic = OPENAI_API_KEY && String(process.env.ADVISORY_SEMANTIC_SCORING || '').toLowerCase() !== 'false'
+
+  if (useSemantic) {
+    try {
+      return await scoreAdvisoryRowsSemantic(rows, profile, {
+        fullPlanText: fullPlanText || '',
+        apiKey: OPENAI_API_KEY,
+        model: OPENAI_EMBEDDING_MODEL,
+      })
+    } catch (err) {
+      console.error('advisory semantic scoring (fallback a heurística):', err)
+    }
+  }
+
+  if (String(fullPlanText || '').trim()) {
+    return scoreAdvisoryRowsByGeneratedPlan(rows, profile, fullPlanText)
+  }
+  return scoreAdvisoryRows(rows, profile)
 }
 
 function toAnthropicMessages(messages) {
@@ -88,6 +129,7 @@ async function fetchAdvisoryRows() {
   const params = new URLSearchParams({
     select: 'id,nombre,empresa,web,email,productos_servicios,especialidades,industrias,etapas,ubicacion,bio,experiencia_anios,score,activo',
     limit: '500',
+    order: 'nombre',
   })
 
   const response = await fetch(`${SUPABASE_URL}/rest/v1/advisory?${params.toString()}`, {
@@ -105,13 +147,15 @@ async function fetchAdvisoryRows() {
 async function fetchAdvisoryCandidates(profile) {
   if (!profile) return []
   const rows = await fetchAdvisoryRows()
-  return pickTopAdvisoryCandidates(scoreAdvisoryRows(rows, profile))
+  const sorted = await scoreAdvisoryRowsForRequest(rows, profile, '')
+  return pickTopAdvisoryCandidates(sorted, buildCaseSeed(profile))
 }
 
 async function rerankAdvisoryCandidatesByPlan(profile, reportText) {
   if (!profile || !reportText) return []
   const rows = await fetchAdvisoryRows()
-  return pickTopAdvisoryCandidates(scoreAdvisoryRowsByGeneratedPlan(rows, profile, reportText))
+  const sorted = await scoreAdvisoryRowsForRequest(rows, profile, reportText)
+  return pickTopAdvisoryCandidates(sorted, buildCaseSeed(profile))
 }
 
 function sanitizeAdvisoryCandidates(candidates) {
@@ -387,49 +431,6 @@ ${text}`,
   return replaceScorecardSection(text, scorecardOnly)
 }
 
-function extractSectionText(report = '', headingRegex) {
-  const lines = String(report || '').replace(/\r\n/g, '\n').split('\n')
-  const out = []
-  let inSection = false
-  for (const line of lines) {
-    const m = line.match(/^##\s+(.+)$/)
-    if (m) {
-      const title = String(m[1] || '')
-        .trim()
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-      if (headingRegex.test(title)) {
-        inSection = true
-        continue
-      }
-      if (inSection) break
-    }
-    if (inSection) out.push(line)
-  }
-  return out.join('\n').trim()
-}
-
-function buildAdvisorsSectionFromCandidates(candidates = []) {
-  if (!Array.isArray(candidates) || candidates.length === 0) {
-    return '## ADVISORS RECOMENDADOS\nSin candidatos disponibles en la base de datos para este caso.'
-  }
-
-  const lines = ['## ADVISORS RECOMENDADOS']
-  candidates.forEach((c, i) => {
-    const score = Number(c.fitScore || 0)
-    const ajuste = score >= 18 ? 'ALTO' : 'MEDIO'
-    const specialties = Array.isArray(c.especialidades) ? c.especialidades.filter(Boolean) : []
-    const specialty = specialties[0] || c.industrias?.[0] || 'Asesoría estratégica empresarial'
-    const why = String(c.fitSummary || '').trim() || 'Puede ayudar a ejecutar y acelerar acciones clave del plan de 90 días.'
-    lines.push(`${i + 1}. ${c.nombre} - Ajuste: ${ajuste}`)
-    lines.push(`- Especialidad clave: ${specialty}`)
-    lines.push(`- Justificación: ${why}`)
-    lines.push('')
-  })
-  return lines.join('\n').trim()
-}
-
 function replaceOrInsertAdvisorsSection(report = '', advisorsSection = '') {
   const text = String(report || '').replace(/\r\n/g, '\n')
   if (!text.trim()) return advisorsSection
@@ -445,6 +446,76 @@ function replaceOrInsertAdvisorsSection(report = '', advisorsSection = '') {
   }
 
   return `${text.trim()}\n\n${advisorsSection.trim()}`
+}
+
+function analyzeAdvisorsInReport(reportText = '', advisoryRows = []) {
+  if (!String(reportText || '').trim() || !Array.isArray(advisoryRows) || advisoryRows.length === 0) {
+    return { names: [], matched: [], invalidNames: [], hasSection: false }
+  }
+  const section = extractAdvisorsSectionFromReport(reportText)
+  const names = parseNumberedAdvisorNamesFromAdvisorsSection(section)
+  const matched = matchAdvisoryRowsByNamesStrict(advisoryRows, names)
+  const matchedKeys = new Set(matched.map((r) => normAdvisorNameKey(r?.nombre)))
+  const invalidNames = names.filter((n) => !matchedKeys.has(normAdvisorNameKey(n)))
+  return {
+    names,
+    matched,
+    invalidNames,
+    hasSection: Boolean(String(section || '').trim()),
+  }
+}
+
+async function ensureAdvisorsUseDirectory({
+  text,
+  enabled,
+  advisoryRows,
+  systemPrompt,
+  apiKey,
+  model,
+}) {
+  if (!enabled) return text
+  let current = String(text || '')
+  let analysis = analyzeAdvisorsInReport(current, advisoryRows)
+  if (!analysis.hasSection || analysis.names.length === 0 || analysis.invalidNames.length === 0) {
+    return text
+  }
+
+  // Reintenta una vez para forzar nombres válidos del directorio.
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const fixedSection = await anthropicText({
+      apiKey,
+      model,
+      systemPrompt,
+      messages: [{
+        role: 'user',
+        content: `Corrige SOLO la sección ADVISORS RECOMENDADOS del siguiente informe.
+
+Reglas obligatorias:
+- Devuelve únicamente la sección completa iniciando con: ## ADVISORS RECOMENDADOS
+- Usa solo nombres existentes en el bloque DIRECTORIO ADVISORY del contexto.
+- No inventes nombres ni uses miembros del consejo.
+- Recomienda entre 1 y 3 advisors.
+- Mantén el formato:
+1. [Nombre] - Ajuste: [ALTO/MEDIO]
+- Especialidad clave: ...
+- Justificación: ...
+
+Nombres inválidos detectados en el informe actual: ${analysis.invalidNames.join(', ')}.
+
+INFORME ACTUAL:
+${current}`,
+      }],
+      maxTokens: 1200,
+      temperature: 0.1,
+    })
+
+    const fixed = String(fixedSection || '').trim()
+    if (!fixed || !/^##\s*ADVISORS RECOMENDADOS/i.test(fixed)) break
+    current = replaceOrInsertAdvisorsSection(current, fixed)
+    analysis = analyzeAdvisorsInReport(current, advisoryRows)
+    if (analysis.names.length > 0 && analysis.invalidNames.length === 0) return current
+  }
+  return current
 }
 
 async function readRawBody(req) {
@@ -503,9 +574,30 @@ export async function handleAdvisoryRecommendations(req, res) {
   }
 
   try {
-    const candidates = String(profile?.planText || '').trim()
-      ? await rerankAdvisoryCandidatesByPlan(profile, profile.planText)
-      : await fetchAdvisoryCandidates(profile)
+    const rows = await fetchAdvisoryRows()
+    const planText = String(profile?.planText || '').trim()
+
+    if (planText) {
+      const section = extractAdvisorsSectionFromReport(planText)
+      const names = parseNumberedAdvisorNamesFromAdvisorsSection(section)
+      const plainNames = names.length > 0 ? [] : parsePlainAdvisorNamesFromAdvisorsSection(section)
+      const finalNames = names.length > 0 ? names : plainNames
+      if (finalNames.length > 0) {
+        const matched = matchAdvisoryRowsByNamesStrict(rows, finalNames)
+        if (matched.length > 0) {
+          return res.status(200).json({ candidates: sanitizeAdvisoryCandidates(matched) })
+        }
+        // Fallback: si strict no encontró nada, intenta fuzzy matching
+        const fuzzyMatched = matchAdvisoryRowsByNames(rows, finalNames)
+        if (fuzzyMatched.length > 0) {
+          return res.status(200).json({ candidates: sanitizeAdvisoryCandidates(fuzzyMatched) })
+        }
+      }
+      const byPlan = await rerankAdvisoryCandidatesByPlan(profile, planText)
+      return res.status(200).json({ candidates: sanitizeAdvisoryCandidates(byPlan) })
+    }
+
+    const candidates = await fetchAdvisoryCandidates(profile)
     return res.status(200).json({ candidates: sanitizeAdvisoryCandidates(candidates) })
   } catch (err) {
     console.error('advisory-recommendations:', err)
@@ -521,21 +613,16 @@ export async function handleChat(req, res) {
   const user = await requireSupabaseUser(req, res)
   if (!user) return
 
-  const {
-    system,
-    messages,
-    stream,
-    advisoryProfile,
-    advisoryCandidatesFromClient,
-    skipAdvisoryContext,
-  } = req.body || {}
+  const { system, messages, stream, skipAdvisoryContext } = req.body || {}
 
   let advisoryContext = ''
+  let advisoryRows = []
   if (!skipAdvisoryContext) {
-    const advisoryCandidates = Array.isArray(advisoryCandidatesFromClient)
-      ? normalizeClientAdvisoryCandidates(advisoryCandidatesFromClient)
-      : await fetchAdvisoryCandidates(advisoryProfile)
-    advisoryContext = buildAdvisoryContext(advisoryCandidates)
+    const { ADVISORY_CATALOG_MAX_TOTAL_CHARS } = envConfig()
+    advisoryRows = await fetchAdvisoryRows()
+    advisoryContext = buildFullAdvisoryDatabaseContext(advisoryRows, {
+      maxTotalChars: ADVISORY_CATALOG_MAX_TOTAL_CHARS,
+    })
   }
 
   const systemPrompt = [system, advisoryContext].filter(Boolean).join('\n\n')
@@ -581,17 +668,19 @@ export async function handleChat(req, res) {
         model: selectedModel || modelsToTry[0],
         systemPrompt,
       })
-
-      const planSectionText = extractSectionText(finalText, /^plan de accion$/i)
-      if (advisoryProfile && planSectionText) {
-        const topByPlan = await rerankAdvisoryCandidatesByPlan(advisoryProfile, finalText)
-        if (topByPlan.length > 0) {
-          finalText = replaceOrInsertAdvisorsSection(finalText, buildAdvisorsSectionFromCandidates(topByPlan))
-        }
-      }
+      finalText = await ensureAdvisorsUseDirectory({
+        text: finalText,
+        enabled: !skipAdvisoryContext,
+        advisoryRows,
+        systemPrompt,
+        apiKey: ANTHROPIC_API_KEY,
+        model: selectedModel || modelsToTry[0],
+      })
 
       if (finalText && finalText !== streamedText) {
-        res.write(`data: ${JSON.stringify({ text: finalText })}\n\n`)
+        // final:true indica al cliente que reemplace (no acumule) el texto completo,
+        // asegurando que streamed == finalText y no original+final duplicado.
+        res.write(`data: ${JSON.stringify({ text: finalText, final: true })}\n\n`)
       }
       res.write('data: [DONE]\n\n')
       return res.end()
@@ -610,14 +699,14 @@ export async function handleChat(req, res) {
       model: selectedModel || modelsToTry[0],
       systemPrompt,
     })
-
-    const planSectionText = extractSectionText(finalText, /^plan de accion$/i)
-    if (advisoryProfile && planSectionText) {
-      const topByPlan = await rerankAdvisoryCandidatesByPlan(advisoryProfile, finalText)
-      if (topByPlan.length > 0) {
-        finalText = replaceOrInsertAdvisorsSection(finalText, buildAdvisorsSectionFromCandidates(topByPlan))
-      }
-    }
+    finalText = await ensureAdvisorsUseDirectory({
+      text: finalText,
+      enabled: !skipAdvisoryContext,
+      advisoryRows,
+      systemPrompt,
+      apiKey: ANTHROPIC_API_KEY,
+      model: selectedModel || modelsToTry[0],
+    })
 
     return res.json({ text: finalText })
   } catch (err) {

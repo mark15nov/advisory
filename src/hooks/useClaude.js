@@ -96,8 +96,13 @@ export async function callClaude({
             const parsed = JSON.parse(data)
             const text = parsed.text || ''
             if (text) {
-              fullText += text
-              onChunk(text)
+              if (parsed.final) {
+                // El servidor envió el texto completo y corregido: reemplazar en lugar de acumular.
+                fullText = text
+              } else {
+                fullText += text
+              }
+              onChunk(text, !!parsed.final)
             }
           } catch {}
         }
@@ -113,8 +118,12 @@ export async function callClaude({
           const parsed = JSON.parse(data)
           const text = parsed.text || ''
           if (text) {
-            fullText += text
-            onChunk(text)
+            if (parsed.final) {
+              fullText = text
+            } else {
+              fullText += text
+            }
+            onChunk(text, !!parsed.final)
           }
         } catch {}
       }

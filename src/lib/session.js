@@ -145,17 +145,17 @@ REGLAS OBLIGATORIAS PARA LA HOJA DE RUTA:
 - Prioriza compromisos concretos del empresario (qué hará, en qué plazo y con qué resultado esperado).
 
 ## ADVISORS RECOMENDADOS
-NO OMITAS ESTA SECCIÓN si el bloque "CANDIDATOS ADVISORY DESDE BASE DE DATOS" incluye al menos un nombre. Debe aparecer ANTES de "## CARTA DEL CONSEJO" y con el encabezado exacto "## ADVISORS RECOMENDADOS".
+NO OMITAS ESTA SECCIÓN si el bloque "DIRECTORIO ADVISORY" incluye al menos un perfil con campo "Nombre:". Debe aparecer ANTES de "## CARTA DEL CONSEJO" y con el encabezado exacto "## ADVISORS RECOMENDADOS".
 
 REGLA ANTI-CONTRADICCIÓN (OBLIGATORIA):
-- El bloque "CANDIDATOS ADVISORY DESDE BASE DE DATOS" es la ÚNICA fuente de nombres para esta sección. Son personas del directorio Advisory (Supabase), no los participantes del foro.
-- Los nombres que aparecen en "## OPINIONES DEL CONSEJO" son miembros del consejo de la sesión en vivo: NO los trates como candidatos del directorio ni los mezcles con "CANDIDATOS ADVISORY DESDE BASE DE DATOS".
-- Si el bloque lista una o más personas numeradas (1. Nombre…), entonces SÍ hay candidatos en base de datos: NO escribas "Sin candidatos disponibles en la base de datos para este caso." Recomienda solo entre esos nombres, según las reglas de abajo.
-- Si el bloque dice explícitamente "Sin candidatos disponibles" (y no lista personas), entonces escribe únicamente: "Sin candidatos disponibles en la base de datos para este caso." y no enumeres a nadie ni hables de "candidatos preseleccionados" tomados del consejo.
+- El bloque "DIRECTORIO ADVISORY (public.advisory, Supabase)" es el catálogo completo o parcial (según límite de contexto) de perfiles reales: ahí lees nombres, industrias, especialidades, servicios, bio, etc. Tú ELEGES entre esas filas. No mezcles con asistentes o miembros del foro.
+- Los nombres en "## OPINIONES DEL CONSEJO" son del consejo en vivo, NO forman el directorio y NO deben aparecer en esta sección.
+- Si el bloque "DIRECTORIO ADVISORY" no lista ninguna línea con perfil (o indica cero en base), entonces escribe solo: "Sin candidatos disponibles en la base de datos para este caso."
+- Cada registro del directorio viene en una línea con "Nombre:…" y "id:…" (o identificador). Elegir entre ellos: SOLO nombres que aparezcan en esas líneas. No inventes ni alteres nombres.
 
-Si recibes el bloque "CANDIDATOS ADVISORY DESDE BASE DE DATOS" con al menos una persona:
-- SIEMPRE recomienda 3 advisors si hay 3 o más candidatos en el bloque. Si solo hay 2, recomienda 2. Si solo hay 1, recomienda 1.
-- Solo puedes elegir nombres que aparezcan en ese bloque; no inventes advisors.
+Si el directorio incluye al menos un perfil:
+- Recomienda entre 1 y 3 advisors (3 si en el listado alcanzaste a leer 3+ candidatos; si leíste 2, solo 2; si 1, solo 1) según afinidad con el caso y el plan.
+- Copia el nombre con la misma ortografía del campo "Nombre:…" del directorio. No uses variaciones o apodos que no aparezcan.
 
 CRITERIO DE SELECCIÓN Y ORDEN (por prioridad):
 1. PRIMERO busca advisors que puedan HACER NEGOCIO directamente con el presentador o EJECUTAR algún punto del plan de 90 días. Revisa la hoja de ruta que acabas de generar y cruza cada acción con los servicios, productos y especialidades de los candidatos. Si un advisor puede implementar, proveer o acelerar alguna de esas acciones, ese advisor va primero.
