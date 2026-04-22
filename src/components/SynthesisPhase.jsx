@@ -850,7 +850,6 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
                   especialidad: aiEntry?.especialidad,
                 })
               const desc = (dbAdvisor?.bio || dbAdvisor?.productos_servicios || '').trim()
-              const shownJustification = justification || 'Perfil sugerido por Claude; revisa validación con el directorio.'
               const isVerified = Boolean(dbAdvisor?.id)
               return (
                 <li key={dbAdvisor?.id || `${normAdvisorName(displayName)}-${rank}`} className="directory-advisors-item">
@@ -889,16 +888,6 @@ Genera el plan de acción ejecutivo completo basado en todo lo anterior.`
                         )}
                       </div>
                     )}
-                    {desc && (
-                      <div className="directory-advisor-description">
-                        <span className="directory-advisor-desc-label">Descripción</span>
-                        <p className="directory-advisor-desc">{desc.length > 300 ? desc.slice(0, 300) + '…' : desc}</p>
-                      </div>
-                    )}
-                    <div className="directory-advisor-justification">
-                      <span className="directory-advisor-why-label">Cómo puede ayudar</span>
-                      <p className="directory-advisor-why">{shownJustification}</p>
-                    </div>
                   </div>
                 </li>
               )
